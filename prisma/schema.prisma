@@ -106,6 +106,7 @@ model User {
   buddyRequestsReceived    BuddyRequest[]            @relation("BuddyRequestsReceived")
   bookListings             BookListing[]             @relation("SellerBookListings")
   acquiredBooks            BookListing[]             @relation("BuyerBookListings")
+  authoredNotices          InstituteNotice[]         @relation("NoticeAuthor")
 
   @@map("user")
 }
@@ -452,6 +453,7 @@ model Institute {
 
   conversations Conversation[]
   communicationTemplates InstituteCommunicationTemplate[]
+  notices       InstituteNotice[]
 
   @@index([cityId])
   @@index([slug])
@@ -2916,3 +2918,52 @@ model InstituteCommunicationTemplate {
   @@map("institute_communication_template")
 }
 
+// ─── Notice Board ────────────────────────────────────────────────────────────
+
+enum NoticeCategory {
+  GENERAL
+  EXAM
+  HOLIDAY
+  FEE
+  RESULT
+  EVENT
+  ADMISSION
+  URGENT
+}
+
+enum NoticePriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum NoticeVisibility {
+  PUBLIC
+  MEMBERS_ONLY
+  STAFF_ONLY
+}
+
+model InstituteNotice {
+  id            String           @id @default(cuid())
+  instituteId   String
+  authorId      String
+  title         String
+  body          String           @db.Text
+  category      NoticeCategory   @default(GENERAL)
+  priority      NoticePriority   @default(NORMAL)
+  visibility    NoticeVisibility @default(PUBLIC)
+  isPinned      Boolean          @default(false)
+  isActive      Boolean          @default(true)
+  expiresAt     DateTime?
+  attachmentUrl String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  institute Institute @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  author    User      @relation("NoticeAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([instituteId, isActive])
+  @@index([instituteId, isPinned])
+  @@map("institute_notice")
+}

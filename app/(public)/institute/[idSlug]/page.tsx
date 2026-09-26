@@ -9,7 +9,7 @@ import {
   PlayCircle, User, Presentation, BookOpen, IndianRupee, Clock,
   Home, Award, Calendar, Building, ThumbsUp, ThumbsDown, HelpCircle, Check,
   BadgeCheck, MessageCircle, ArrowRight, Settings, Lock, Unlock,
-  GraduationCap, UserCheck
+  GraduationCap, UserCheck, Bell
 } from "lucide-react";
 import { FaFacebook, FaInstagram, FaLinkedin, FaTelegram, FaTwitter, FaWhatsapp, FaYoutube } from "react-icons/fa";
 
@@ -38,6 +38,7 @@ import { ReviewItem } from "@/components/reviews/ReviewItem";
 import { UnlockContactButton } from "@/components/institutes/UnlockContactButton";
 import { UnlockBasicFeaturesOverlay } from "@/components/institutes/UnlockBasicFeaturesOverlay";
 import { VerifiedBadge } from "@/components/institutes/VerifiedBadge";
+import { NoticeBoardSection } from "@/components/notices/NoticeBoardSection";
 
 export const revalidate = 0;
 
@@ -152,6 +153,8 @@ export default async function InstitutePage({ params }: PageProps) {
     instituteManagers,
     recentBlogs,
     userBatchIds,
+    publicNotices,
+    totalPublicNotices,
   ] = await Promise.all([
     userId
       ? prisma.instituteMembership.findMany({
@@ -268,7 +271,51 @@ export default async function InstitutePage({ params }: PageProps) {
       ]).then(([students, teachers]) => {
         return new Set([...students.map((s: any) => s.batchId), ...teachers.map((t: any) => t.batchId)]);
       })
-      : Promise.resolve(new Set<string>())
+      : Promise.resolve(new Set<string>()),
+    prisma.instituteNotice.findMany({
+      where: {
+        instituteId: id,
+        isActive: true,
+        visibility: "PUBLIC",
+        OR: [
+          { expiresAt: null },
+          { expiresAt: { gt: new Date() } }
+        ]
+      },
+      orderBy: [
+        { isPinned: "desc" },
+        { createdAt: "desc" }
+      ],
+      take: 5,
+      select: {
+        id: true,
+        title: true,
+        body: true,
+        category: true,
+        priority: true,
+        isPinned: true,
+        expiresAt: true,
+        attachmentUrl: true,
+        createdAt: true,
+        author: {
+          select: {
+            name: true,
+            image: true,
+          }
+        }
+      }
+    }),
+    prisma.instituteNotice.count({
+      where: {
+        instituteId: id,
+        isActive: true,
+        visibility: "PUBLIC",
+        OR: [
+          { expiresAt: null },
+          { expiresAt: { gt: new Date() } }
+        ]
+      }
+    }),
   ]);
 
   const formattedBlogs: BlogCardPost[] = recentBlogs.map((blog: any) => ({
@@ -575,6 +622,30 @@ export default async function InstitutePage({ params }: PageProps) {
                     </div>
                   </div>
 
+                  {/* ── LATEST NOTICE ALERT BANNER (TOP VISIBILITY) ── */}
+                  {publicNotices.length > 0 && (
+                    <a
+                      href="#notice-board"
+                      className="mt-6 flex items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/10 hover:from-amber-500/25 hover:to-orange-500/20 border-2 border-amber-400/80 shadow-md shadow-amber-500/10 transition-all hover:scale-[1.01] hover:shadow-lg hover:shadow-amber-500/15 group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="relative flex h-3 w-3 shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[11px] font-extrabold uppercase tracking-wide bg-amber-200/90 text-amber-950 px-2 py-0.5 rounded-md shrink-0 shadow-2xs">
+                          <Bell className="w-3 h-3 text-amber-700" /> Notice Board
+                        </span>
+                        <span className="text-xs sm:text-sm font-bold text-slate-900 truncate">
+                          {publicNotices[0].isPinned ? "📌 " : ""}{publicNotices[0].title}
+                        </span>
+                      </div>
+                      <span className="shrink-0 text-xs font-extrabold text-amber-800 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                        View ({publicNotices.length}) <ArrowRight className="w-3.5 h-3.5" />
+                      </span>
+                    </a>
+                  )}
+
                   <div className="mt-6 flex flex-col gap-3 rounded-2xl bg-slate-50 p-4 border border-slate-100 text-left">
                     <Link href={safeMapsUrl} target="_blank" rel="noopener noreferrer" className="flex items-start gap-2.5 text-slate-600 hover:text-amber-600 transition group">
                       <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-amber-500 group-hover:scale-110 transition-transform" />
@@ -691,6 +762,14 @@ export default async function InstitutePage({ params }: PageProps) {
                   </div>
                 )}
               </div>
+
+              {/* ── NOTICE BOARD (PRIMARY TOP PLACEMENT) ── */}
+              <NoticeBoardSection
+                notices={publicNotices}
+                instituteName={institute.name}
+                instituteSlug={idSlug}
+                totalCount={totalPublicNotices}
+              />
             </div>
 
             {/* Sticky CTA */}
@@ -726,6 +805,14 @@ export default async function InstitutePage({ params }: PageProps) {
         <div className="mx-auto max-w-7xl px-4 overflow-x-auto no-scrollbar py-3">
           <ul className="flex items-center space-x-8 text-sm font-bold text-slate-600 whitespace-nowrap">
             <li><a href="#overview" className="hover:text-amber-600 transition-colors">Overview</a></li>
+            {publicNotices.length > 0 && (
+              <li>
+                <a href="#notice-board" className="text-amber-600 font-extrabold flex items-center gap-1.5 hover:text-amber-700 transition-colors">
+                  <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                  Notices ({totalPublicNotices})
+                </a>
+              </li>
+            )}
             <li><a href="#courses" className="hover:text-amber-600 transition-colors">Courses & Fees</a></li>
             <li><a href="#community" className="hover:text-amber-600 transition-colors">Community</a></li>
             <li><a href="#gallery" className="hover:text-amber-600 transition-colors">Gallery</a></li>

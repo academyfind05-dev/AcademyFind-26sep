@@ -2,7 +2,7 @@ import { PremiumLock } from "@/components/manager/PremiumLock";
 import { ManagerSidebarWrapper } from "@/components/manager/ManagerSidebarWrapper";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/prisma";
-import { ArrowLeft, ArrowRight, BarChart2, BarChart3, CreditCard, LayoutDashboardIcon, MessageSquare, User, UserRound, Users, PackageOpen, MessageCircle, FileText, Zap, Building2, Sparkles, UserCheck, GraduationCap, KeyRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, BarChart2, BarChart3, Bell, CreditCard, LayoutDashboardIcon, MessageSquare, User, UserRound, Users, PackageOpen, MessageCircle, FileText, Zap, Building2, Sparkles, UserCheck, GraduationCap, KeyRound } from "lucide-react";
 import { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
@@ -289,6 +289,12 @@ export default async function ManagerDashBoardLayout({
                             icon={<FileText />}
                             label="Articles"
                             locked={plan === "BASIC" || plan === "VERIFIED"}
+                        />
+
+                        <ManagerSidebarLink
+                            href={`/manager/${instituteId}/notices`}
+                            icon={<Bell />}
+                            label="Notice Board"
                         />
 
                         <ManagerSidebarLink

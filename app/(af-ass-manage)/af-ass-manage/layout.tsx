@@ -169,6 +169,7 @@ export default async function AdminLayout({
                         <SidebarLink href="/af-ass-manage/contactmessages" icon={<Contact />} label="Contact Messages" count={contactCount} />
                         <SidebarLink href="/af-ass-manage/payments" icon={<Pyramid />} label="Payment Approvals" count={paymentCount} />
                         <SidebarLink href="/af-ass-manage/advertisements" icon={<Megaphone />} label="Advertisements" count={adCount} />
+                        <SidebarLink href="/af-ass-manage/notices" icon={<BellIcon />} label="Notice Board" />
 
                         <SidebarLink href="/af-ass-manage/institutes" icon={<Building2 />} label="All Institutes" />
                         <SidebarLink href="/af-ass-manage/users" icon={<Users />} label="User Management" />
