@@ -2,7 +2,18 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // Prevent Next.js from bundling these — they must use native Node.js require/ESM
-  serverExternalPackages: ["firebase-admin", "firebase-admin/app", "firebase-admin/auth"],
+  // firebase-admin uses jose (ESM-only) via jwks-rsa — bundling it causes ERR_REQUIRE_ESM on Vercel
+  serverExternalPackages: [
+    "firebase-admin",
+    "firebase-admin/app",
+    "firebase-admin/auth",
+    "firebase-admin/database",
+    "firebase-admin/firestore",
+    "firebase-admin/messaging",
+    "firebase-admin/storage",
+    "jose",
+    "jwks-rsa",
+  ],
   experimental: {
     serverActions: {
       bodySizeLimit: "10mb",
@@ -43,6 +54,25 @@ const nextConfig: NextConfig = {
         destination: "/institute/:path*",
       },
     ];
+  },
+  // Webpack: also externalize at the bundler level for belt-and-suspenders
+  // This prevents the ERR_REQUIRE_ESM error from jose (used inside firebase-admin)
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.externals = [
+        ...(Array.isArray(config.externals) ? config.externals : config.externals ? [config.externals] : []),
+        "firebase-admin",
+        "firebase-admin/app",
+        "firebase-admin/auth",
+        "firebase-admin/database",
+        "firebase-admin/firestore",
+        "firebase-admin/messaging",
+        "firebase-admin/storage",
+        "jose",
+        "jwks-rsa",
+      ];
+    }
+    return config;
   },
 };
 
