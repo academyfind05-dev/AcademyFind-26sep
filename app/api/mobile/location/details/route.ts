@@ -66,53 +66,59 @@ export async function GET(request: NextRequest) {
   }
 
   // 3. Google Place Details API (Places API New with Referer support + Photon fallback)
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyCJVo2m1ic_xT4BLDELw6h63mOjO9PqquE';
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
-  try {
-    // 3a. Try Google Places API (New) - supports Referer-restricted keys
-    const cleanPlaceId = placeId.startsWith('places/') ? placeId.replace('places/', '') : placeId;
-    const newPlacesRes = await fetch(
-      `https://places.googleapis.com/v1/places/${encodeURIComponent(cleanPlaceId)}?fields=id,displayName,location,formattedAddress`,
-      {
-        headers: {
-          'X-Goog-Api-Key': apiKey,
-          'X-Goog-FieldMask': 'id,displayName,location,formattedAddress',
-          'Referer': 'https://www.academyfind.com'
+  if (apiKey) {
+    try {
+      // 3a. Try Google Places API (New) - supports Referer-restricted keys
+      const cleanPlaceId = placeId.startsWith('places/') ? placeId.replace('places/', '') : placeId;
+      const newPlacesRes = await fetch(
+        `https://places.googleapis.com/v1/places/${encodeURIComponent(cleanPlaceId)}?fields=id,displayName,location,formattedAddress`,
+        {
+          headers: {
+            'X-Goog-Api-Key': apiKey,
+            'X-Goog-FieldMask': 'id,displayName,location,formattedAddress',
+            'Referer': 'https://www.academyfind.com'
+          }
         }
-      }
-    );
+      );
 
-    if (newPlacesRes.ok) {
-      const newPlacesData = await newPlacesRes.json();
-      if (newPlacesData.location?.latitude != null && newPlacesData.location?.longitude != null) {
-        return NextResponse.json({
-          result: {
-            formatted_address: newPlacesData.formattedAddress || searchParams.get('address') || 'Selected Location',
-            name: newPlacesData.displayName?.text || '',
-            geometry: {
-              location: {
-                lat: newPlacesData.location.latitude,
-                lng: newPlacesData.location.longitude
+      if (newPlacesRes.ok) {
+        const newPlacesData = await newPlacesRes.json();
+        if (newPlacesData.location?.latitude != null && newPlacesData.location?.longitude != null) {
+          return NextResponse.json({
+            result: {
+              formatted_address: newPlacesData.formattedAddress || searchParams.get('address') || 'Selected Location',
+              name: newPlacesData.displayName?.text || '',
+              geometry: {
+                location: {
+                  lat: newPlacesData.location.latitude,
+                  lng: newPlacesData.location.longitude
+                }
               }
             }
-          }
-        });
+          });
+        }
       }
-    }
 
-    // 3b. Fallback to Legacy Google Places API
-    const res = await fetch(
-      `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&fields=geometry,formatted_address,name&key=${apiKey}`,
-      { headers: { 'Referer': 'https://www.academyfind.com' } }
-    );
-    const data = await res.json();
-    if (data?.result?.geometry?.location) {
-      return NextResponse.json(data);
+      // 3b. Fallback to Legacy Google Places API
+      const res = await fetch(
+        `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&fields=geometry,formatted_address,name&key=${apiKey}`,
+        { headers: { 'Referer': 'https://www.academyfind.com' } }
+      );
+      const data = await res.json();
+      if (data?.result?.geometry?.location) {
+        return NextResponse.json(data);
+      }
+    } catch (e) {
+      console.warn('Google Places API details error, falling back to Photon:', e);
     }
+  }
 
-    // 3c. Fallback to Photon geocoding if placeId fails or Google restricts
-    const address = searchParams.get('address');
-    if (address) {
+  // 3c. Fallback to Photon geocoding if placeId fails, Google restricts, or apiKey is missing
+  const address = searchParams.get('address');
+  if (address) {
+    try {
       const photonRes = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(address)}&limit=1`);
       if (photonRes.ok) {
         const photonData = await photonRes.json();
@@ -131,11 +137,10 @@ export async function GET(request: NextRequest) {
           });
         }
       }
+    } catch (photonErr) {
+      console.error('Photon fallback error:', photonErr);
     }
-
-    return NextResponse.json(data);
-  } catch (error: any) {
-    console.error('Location details error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  return NextResponse.json({ error: 'Location details not found' }, { status: 404 });
 }

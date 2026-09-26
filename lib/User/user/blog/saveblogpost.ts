@@ -85,6 +85,23 @@ async function persistBlogPost(
     userId = session.user.id;
   }
 
+  // Server-side gate: Phone verification required to publish blogs
+  if (parsed.data.intent === "publish") {
+    const publishingUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { phone: true, phoneVerified: true, role: true },
+    });
+    if (
+      publishingUser?.role !== "ADMIN" &&
+      !publishingUser?.phoneVerified
+    ) {
+      return {
+        success: false,
+        error: "Phone verification is required before submitting a blog post. Please verify your phone number.",
+      };
+    }
+  }
+
   let author = await prisma.blogAuthorProfile.findUnique({
     where: { userId },
     select: { id: true, displayName: true },
@@ -148,7 +165,11 @@ async function persistBlogPost(
   });
   const isAdmin = currentUser?.role === "ADMIN";
 
-  let existingPost: any = null;
+  let existingPost: {
+    authorProfileId: string | null;
+    publishedAt: Date | null;
+    status: BlogStatus;
+  } | null = null;
   if (value.id) {
     existingPost = await prisma.blogPost.findUnique({
       where: { id: value.id },

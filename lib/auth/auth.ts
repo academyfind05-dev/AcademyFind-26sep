@@ -43,6 +43,11 @@ export const auth = betterAuth({
                 type: "string",
                 required: false,
             },
+            phoneVerified: {
+                type: "boolean",
+                required: false,
+                defaultValue: false,
+            },
             onboardingCompleted: {
                 type: "boolean",
                 required: false,

@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
   const seenDescriptions = new Set<string>();
 
   // 1. Google Places Autocomplete API (Highest Accuracy)
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyCJVo2m1ic_xT4BLDELw6h63mOjO9PqquE';
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   if (apiKey) {
     try {
       const googleRes = await fetch('https://places.googleapis.com/v1/places:autocomplete', {

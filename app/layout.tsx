@@ -19,6 +19,7 @@ import UserActivityTracker from "@/components/User/UserActivityTracker";
 import { getCachedSession } from "@/lib/auth/session";
 import VisitorTracker from "@/components/analytics/VisitorTracker";
 import MobileAppProvider from "@/components/providers/MobileAppProvider";
+import PhoneNudgeBanner from "@/components/auth/PhoneNudgeBanner";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -130,6 +131,7 @@ export default async function RootLayout({
         {/* <CursorGlow /> */}
         <GoogleMapsProvider>
           <NextTopLoader color="#f59e0b" showSpinner={false} />
+          <PhoneNudgeBanner />
 
           <main className="flex-1">
             {children}

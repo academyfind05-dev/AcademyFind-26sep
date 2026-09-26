@@ -10,6 +10,7 @@ export default async function ProfileSettingsPage() {
       name: true,
       username: true,
       phone: true,
+      phoneVerified: true,
       image: true,
       coverImage: true,
       studentProfile: {

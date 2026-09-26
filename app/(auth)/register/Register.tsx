@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   Mail,
@@ -9,33 +9,38 @@ import {
   Eye,
   EyeOff,
   User,
-  Loader2, // 👈 Loading spinner ke liye add kiya hai
+  Loader2,
+  ShieldCheck,
 } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import Image from "next/image";
 import { authClient } from "@/lib/auth/auth-client";
 import { useRouter, useSearchParams } from "next/navigation";
-import toast from 'react-hot-toast'
+import toast from "react-hot-toast";
 import { useMobileApp } from "@/hooks/useMobileApp";
 import { getAuthRedirectTarget } from "@/lib/auth/redirect-utils";
+import PhoneOtpModal from "@/components/auth/PhoneOtpModal";
 
-export default function RegisterComponent() { // Component ka naam RegisterPage hona better hai
+export default function RegisterComponent() {
   const [method, setMethod] = useState<"email" | "phone">("email");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { isMobileApp } = useMobileApp();
 
-  // User Details States
+  // Email registration states
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setphone] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-
-  // 🚀 Nayi States for frictionless flow
   const [showOtpScreen, setShowOtpScreen] = useState(false);
   const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // Phone registration modal
+  const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
+  // Temporary state for phone registration
+  const [phoneRegName, setPhoneRegName] = useState("");
 
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -43,26 +48,17 @@ export default function RegisterComponent() { // Component ka naam RegisterPage 
 
   useEffect(() => {
     authClient.getSession().then((res) => {
-      if (res.data?.user) {
-        router.replace(redirectTarget);
-      }
+      if (res.data?.user) router.replace(redirectTarget);
     });
   }, [router, redirectTarget]);
 
   const handleGoogleLogin = async () => {
-    await authClient.signIn.social({
-      provider: "google",
-      callbackURL: redirectTarget,
-    });
+    await authClient.signIn.social({ provider: "google", callbackURL: redirectTarget });
   };
-  // 1. Account Create & Send OTP
+
+  // Email registration flow
   async function handleRegister(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-
-    if (method !== "email") {
-      toast.error("Phone registration will be implemented separately.");
-      return;
-    }
     if (!name.trim() || !email.trim()) {
       toast.error("Please enter both name and email");
       return;
@@ -75,98 +71,108 @@ export default function RegisterComponent() { // Component ka naam RegisterPage 
       toast.error("Passwords do not match");
       return;
     }
-
     setIsLoading(true);
-
     try {
-      // Step A: Account Create Karein
       const { error: signUpError } = await authClient.signUp.email({
         name,
         email,
         password,
         phone,
       });
-
       if (signUpError) {
-        toast.error("Registration failed");
-        setIsLoading(false);
+        toast.error(signUpError.message || "Registration failed");
         return;
       }
-
       const { error: otpError } = await authClient.emailOtp.sendVerificationOtp({
-        email: email,
+        email,
         type: "email-verification",
       });
-
       if (otpError) {
-        toast.error("Account created, but OTP sending failed ");
+        toast.error("Account created, but OTP sending failed.");
       } else {
-        // Step C: UI change karke OTP screen dikhayein (No Redirect)
         setShowOtpScreen(true);
-        // Store temporarily for auto-login if they verify via link in the same browser
         if (typeof window !== "undefined") {
           localStorage.setItem("temp_reg_email", email);
           localStorage.setItem("temp_reg_password", password);
         }
-        toast.success("OTP Sent your mail, Please verify")
+        toast.success("OTP sent to your email. Please verify.");
       }
-    } catch (error) {
-      console.error("Unexpected error:", error);
+    } catch {
       toast.error("Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);
     }
   }
 
-  // 2. Verify OTP & Auto-Login
   async function handleVerifyAndLogin(e: React.FormEvent) {
     e.preventDefault();
     if (otp.length < 6) return;
-
     setIsLoading(true);
-
     try {
-      // Step A: Verify OTP
-      const { error: verifyError } = await authClient.emailOtp.verifyEmail({
-        email,
-        otp,
-      });
-
+      const { error: verifyError } = await authClient.emailOtp.verifyEmail({ email, otp });
       if (verifyError) {
         toast.error("Invalid OTP, please enter correct one");
-        setOtp("")
-        setIsLoading(false);
+        setOtp("");
         return;
       }
-
-      // Step B: Auto Login using state password
-      const { error: loginError } = await authClient.signIn.email({
-        email,
-        password,
-      });
-
+      const { error: loginError } = await authClient.signIn.email({ email, password });
       if (loginError) {
         toast.error("Email verified, but auto-login failed. Please login manually.");
-        const loginUrl =
-          redirectTarget && redirectTarget !== "/"
-            ? `/login?callbackUrl=${encodeURIComponent(redirectTarget)}`
-            : "/login";
+        const loginUrl = redirectTarget && redirectTarget !== "/" ? `/login?callbackUrl=${encodeURIComponent(redirectTarget)}` : "/login";
         router.push(loginUrl);
       } else {
-        // Step C: Makkhan redirect to previous page
         if (typeof window !== "undefined") {
           localStorage.removeItem("temp_reg_email");
           localStorage.removeItem("temp_reg_password");
         }
         router.push(redirectTarget);
       }
-    } catch (error) {
-      console.error(error);
+    } catch {
       toast.error("Something went wrong during verification.");
     } finally {
       setIsLoading(false);
     }
   }
+
+  // Phone registration: after OTP verified, create account or login via phone-login API
+  const handlePhoneRegisterVerified = useCallback(async (idToken: string) => {
+    if (!phoneRegName.trim()) {
+      toast.error("Please enter your full name.");
+      setIsPhoneModalOpen(false);
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/auth/phone-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idToken,
+          name: phoneRegName.trim(),
+          autoRegister: true,
+        }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        toast.success(
+          data.isNewUser
+            ? "Account created successfully! Welcome to AcademyFind."
+            : "Logged in to your existing account!"
+        );
+        setIsPhoneModalOpen(false);
+        setTimeout(() => router.push(redirectTarget), 300);
+      } else {
+        toast.error(data.error ?? "Registration failed. Please try again.");
+        setIsPhoneModalOpen(false);
+      }
+    } catch {
+      toast.error("An error occurred during registration. Please try again.");
+      setIsPhoneModalOpen(false);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [phoneRegName, router, redirectTarget]);
 
   return (
     <main className="min-h-screen bg-[#f8f8f8] p-4 lg:p-8">
@@ -174,15 +180,12 @@ export default function RegisterComponent() { // Component ka naam RegisterPage 
 
         {/* LEFT PANEL */}
         <div className="relative hidden w-1/2 overflow-hidden bg-linear-to-b from-amber-400 to-orange-500 p-12 text-white lg:flex lg:flex-col">
-          {/* Logo */}
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/90 backdrop-blur">
               <Image src="/logo.png" alt="academy find logo" width={120} height={120} />
             </div>
             <span className="font-semibold">AcademyFind</span>
           </div>
-
-          {/* Content */}
           <div className="mt-20">
             <h1 className="max-w-md text-5xl font-bold leading-tight">
               Start Your Learning Journey With Confidence
@@ -190,8 +193,6 @@ export default function RegisterComponent() { // Component ka naam RegisterPage 
             <p className="mt-5 max-w-sm text-orange-100">
               Join thousands of students discovering the best coaching institutes across India.
             </p>
-
-            {/* Journey Steps */}
             <div className="mt-12 space-y-4">
               {[
                 { title: "Search Institutes", desc: "Explore coaching institutes across India" },
@@ -211,8 +212,6 @@ export default function RegisterComponent() { // Component ka naam RegisterPage 
               ))}
             </div>
           </div>
-
-          {/* Decorative Circles */}
           <div className="absolute -bottom-32 -right-32 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
           <div className="absolute -top-20 -left-20 h-60 w-60 rounded-full bg-white/10 blur-3xl" />
         </div>
@@ -220,8 +219,6 @@ export default function RegisterComponent() { // Component ka naam RegisterPage 
         {/* RIGHT PANEL */}
         <div className="flex flex-1 items-center justify-center bg-[#fafafa] px-6 py-10">
           <div className="w-full max-w-md">
-
-            {/* Logo Mobile */}
             <div className="mb-8 text-center">
               <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl text-white shadow-lg shadow-amber-500/30">
                 <Image src="/logo.png" alt="AcademyFind Logo" width={120} height={120} />
@@ -232,73 +229,56 @@ export default function RegisterComponent() { // Component ka naam RegisterPage 
               </p>
             </div>
 
-            {/* 🔥 CONDITIONAL RENDERING STARTS HERE */}
             {showOtpScreen ? (
-
-              /* ================= OTP VERIFICATION UI ================= */
+              /* ======= EMAIL OTP VERIFICATION ======= */
               <div className="animate-in fade-in zoom-in duration-300">
                 <div className="mb-8 text-center">
                   <h2 className="text-3xl font-bold bg-linear-to-r from-amber-500 to-rose-200 bg-clip-text text-transparent">
                     Check Your Email
                   </h2>
                   <p className="mt-2 text-sm text-slate-500">
-                    We've sent a 6-digit verification code to <br /> <strong className="text-slate-800">{email}</strong>
+                    We&apos;ve sent a 6-digit verification code to <br />
+                    <strong className="text-slate-800">{email}</strong>
                   </p>
                 </div>
-
                 <form onSubmit={handleVerifyAndLogin} className="space-y-6">
-                  <div>
-                    <input
-                      type="text"
-                      maxLength={6}
-                      placeholder="123456"
-                      className="h-14 w-full rounded-xl border border-slate-200 bg-white px-4 text-center text-2xl font-semibold tracking-[0.5em] outline-none transition-all focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                    />
-                  </div>
-
+                  <input
+                    type="text"
+                    maxLength={6}
+                    placeholder="123456"
+                    className="h-14 w-full rounded-xl border border-slate-200 bg-white px-4 text-center text-2xl font-semibold tracking-[0.5em] outline-none transition-all focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                  />
                   <button
                     type="submit"
                     disabled={isLoading || otp.length < 6}
                     className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-amber-400 font-semibold text-white shadow-md transition-all hover:shadow-lg hover:shadow-amber-500/30 disabled:opacity-70"
                   >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" /> Verifying...
-                      </>
-                    ) : (
-                      "Verify & Login"
-                    )}
+                    {isLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Verifying...</> : "Verify & Login"}
                   </button>
                 </form>
-
                 <p className="mt-8 text-center text-sm text-slate-500">
                   Made a mistake?{" "}
-                  <button
-                    onClick={() => setShowOtpScreen(false)}
-                    className="font-semibold text-amber-400 hover:text-amber-500"
-                  >
+                  <button onClick={() => setShowOtpScreen(false)} className="font-semibold text-amber-400 hover:text-amber-500">
                     Change Email
                   </button>
                 </p>
               </div>
-
             ) : (
-
-              /* ================= ORIGINAL REGISTRATION UI ================= */
+              /* ======= MAIN REGISTER UI ======= */
               <div className="animate-in fade-in duration-300">
-
                 <div className="mb-6 text-center">
                   <h2 className="text-3xl font-bold bg-linear-to-r from-amber-500 to-rose-200 bg-clip-text text-transparent">
                     Create Account
                   </h2>
                   <p className="mt-2 text-sm text-slate-500">
-                    Join AcademyFind and discover India's best coaching institutes.
+                    Join AcademyFind and discover India&apos;s best coaching institutes.
                   </p>
                 </div>
 
-                {/* <div className="mb-6 grid grid-cols-2 rounded-xl bg-slate-100 p-1">
+                {/* Email / Phone toggle */}
+                <div className="mb-6 grid grid-cols-2 rounded-xl bg-slate-100 p-1">
                   <button
                     type="button"
                     onClick={() => setMethod("email")}
@@ -315,124 +295,129 @@ export default function RegisterComponent() { // Component ka naam RegisterPage 
                       method === "phone" ? "bg-amber-400 text-white shadow-sm" : "text-slate-600"
                     }`}
                   >
-                    <Phone size={16} /> Phone
+                    <Phone size={16} /> Phone OTP
                   </button>
-                </div> */}
+                </div>
 
-                <form className="space-y-5" onSubmit={handleRegister}>
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">Full Name <span className="text-red-500">*</span></label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type="text"
-                        required
-                        placeholder="Enter your full name"
-                        className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm outline-none transition-all focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                      />
+                {method === "email" ? (
+                  /* Email registration form */
+                  <form className="space-y-5" onSubmit={handleRegister}>
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">Full Name <span className="text-red-500">*</span></label>
+                      <div className="relative">
+                        <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text" required
+                          placeholder="Enter your full name"
+                          className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm outline-none transition-all focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+                          value={name} onChange={(e) => setName(e.target.value)}
+                        />
+                      </div>
                     </div>
-                  </div>
 
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">Mobile No. </label>
-                    <div className="relative flex items-center">
-                      <span className="absolute left-3.5 text-slate-500 font-medium text-sm pointer-events-none">+91</span>
-                      <input
-                        type="tel"
-                        placeholder="Enter your mobile No."
-                        maxLength={10}
-                        className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-4 text-sm outline-none transition-all focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
-                        value={phone}
-                        onChange={(e) => setphone(e.target.value.replace(/\D/g, ''))}
-                      />
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">Mobile No. (optional)</label>
+                      <div className="relative flex items-center">
+                        <span className="absolute left-3.5 text-slate-500 font-medium text-sm pointer-events-none">+91</span>
+                        <input
+                          type="tel" placeholder="Enter your mobile No."
+                          maxLength={10}
+                          className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-4 text-sm outline-none transition-all focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+                          value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
+                        />
+                      </div>
                     </div>
-                  </div>
 
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      {method === "email" ? "Email Address" : "Phone Number"}
-                      <span className="text-red-500"> *</span>
-                    </label>
-                    <div className="relative">
-                      {method === "email" ? (
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">
+                        Email Address <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
                         <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                      ) : (
-                        <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                      )}
-                      <input
-                        type={method === "email" ? "email" : "tel"}
-                        placeholder={method === "email" ? "Enter your email" : "Enter mobile number"}
-                        required
-                        className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm outline-none transition-all focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
-                        value={method === "email" ? email : phone}
-                        onChange={(e) => {
-                          if (method === "email") setEmail(e.target.value);
-                          else setphone(e.target.value);
-                        }}
-                      />
+                        <input
+                          type="email" required
+                          placeholder="Enter your email"
+                          className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm outline-none transition-all focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+                          value={email} onChange={(e) => setEmail(e.target.value)}
+                        />
+                      </div>
                     </div>
-                  </div>
 
-                  <div>
-                    <label className="text-sm font-medium text-slate-700 mb-2 block">Password <span className="text-red-500">*</span></label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Enter your password"
-                        required
-                        className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-12 text-sm outline-none transition-all focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-                      >
-                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                      </button>
+                    <div>
+                      <label className="text-sm font-medium text-slate-700 mb-2 block">Password <span className="text-red-500">*</span></label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type={showPassword ? "text" : "password"} required
+                          placeholder="Enter your password"
+                          className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-12 text-sm outline-none transition-all focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+                          value={password} onChange={(e) => setPassword(e.target.value)}
+                        />
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+                          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
                     </div>
-                  </div>
 
-                  <div>
-                    <label className="text-sm font-medium text-slate-700 mb-2 block">Confirm Password <span className="text-red-500">*</span></label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type={showConfirmPassword ? "text" : "password"}
-                        placeholder="Confirm your password"
-                        required
-                        className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-12 text-sm outline-none transition-all focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-                      >
-                        {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                      </button>
+                    <div>
+                      <label className="text-sm font-medium text-slate-700 mb-2 block">Confirm Password <span className="text-red-500">*</span></label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type={showConfirmPassword ? "text" : "password"} required
+                          placeholder="Confirm your password"
+                          className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-12 text-sm outline-none transition-all focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+                          value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+                        />
+                        <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+                          {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
                     </div>
-                  </div>
 
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="flex h-12 w-full items-center justify-center gap-2 cursor-pointer rounded-xl bg-amber-400 font-semibold text-white shadow-md transition-all hover:shadow-lg hover:shadow-amber-500/30 disabled:opacity-70"
-                  >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" /> Processing...
-                      </>
-                    ) : (
-                      "Create Account"
-                    )}
-                  </button>
-                </form>
+                    <button
+                      type="submit" disabled={isLoading}
+                      className="flex h-12 w-full items-center justify-center gap-2 cursor-pointer rounded-xl bg-amber-400 font-semibold text-white shadow-md transition-all hover:shadow-lg hover:shadow-amber-500/30 disabled:opacity-70"
+                    >
+                      {isLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</> : "Create Account"}
+                    </button>
+                  </form>
+                ) : (
+                  /* Phone registration panel */
+                  <div className="space-y-5">
+                    <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-5">
+                      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100">
+                        <ShieldCheck className="h-6 w-6 text-amber-600" />
+                      </div>
+                      <p className="text-sm font-semibold text-slate-800 text-center">Register with Phone OTP</p>
+                      <p className="mt-1 text-xs text-slate-500 leading-relaxed text-center">
+                        Create your account using your mobile number. We&apos;ll verify it instantly via OTP.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">Full Name <span className="text-red-500">*</span></label>
+                      <div className="relative">
+                        <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text" required
+                          placeholder="Enter your full name"
+                          className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm outline-none transition-all focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+                          value={phoneRegName} onChange={(e) => setPhoneRegName(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={isLoading || !phoneRegName.trim()}
+                      onClick={() => setIsPhoneModalOpen(true)}
+                      className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-amber-400 font-semibold text-white shadow-md transition-all hover:shadow-lg hover:shadow-amber-500/30 disabled:opacity-70 disabled:cursor-not-allowed"
+                    >
+                      {isLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</> : <><Phone className="h-4 w-4" /> Continue with OTP</>}
+                    </button>
+                  </div>
+                )}
 
                 {!isMobileApp && (
                   <>
@@ -441,7 +426,6 @@ export default function RegisterComponent() { // Component ka naam RegisterPage 
                       <span className="mx-4 text-xs text-slate-400">OR</span>
                       <div className="h-px flex-1 bg-slate-200" />
                     </div>
-
                     <button
                       type="button"
                       className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 transition hover:bg-slate-50"
@@ -455,18 +439,13 @@ export default function RegisterComponent() { // Component ka naam RegisterPage 
                 <p className="mt-8 text-center text-sm text-slate-500">
                   Already have an account?{" "}
                   <Link
-                    href={
-                      redirectTarget && redirectTarget !== "/"
-                        ? `/login?callbackUrl=${encodeURIComponent(redirectTarget)}`
-                        : "/login"
-                    }
+                    href={redirectTarget && redirectTarget !== "/" ? `/login?callbackUrl=${encodeURIComponent(redirectTarget)}` : "/login"}
                     className="font-semibold text-amber-400 hover:text-amber-500"
                   >
                     Sign In
                   </Link>
                 </p>
 
-                {/* Institute Owner CTA */}
                 <div className="mt-8 rounded-2xl bg-amber-50 border border-amber-100 p-5 text-center transition-all shadow-sm hover:bg-amber-100/50">
                   <p className="text-sm font-bold text-slate-800">Are you an Institute Owner?</p>
                   <p className="text-xs text-slate-500 mt-1.5 mb-4">List your institute on AcademyFind to reach thousands of students in your city.</p>
@@ -479,6 +458,15 @@ export default function RegisterComponent() { // Component ka naam RegisterPage 
           </div>
         </div>
       </div>
+
+      {/* Phone OTP Registration Modal */}
+      <PhoneOtpModal
+        isOpen={isPhoneModalOpen}
+        onClose={() => setIsPhoneModalOpen(false)}
+        onVerified={handlePhoneRegisterVerified}
+        title="Register with Phone"
+        subtitle="Enter your mobile number to create an account with OTP verification."
+      />
     </main>
   );
 }

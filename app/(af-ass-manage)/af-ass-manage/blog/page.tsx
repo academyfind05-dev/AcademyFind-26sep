@@ -73,6 +73,7 @@ interface PostListItem {
       name: string | null;
       phone: string | null;
       email: string | null;
+      phoneVerified?: boolean;
     } | null;
   } | null;
   relatedInstitute?: {
@@ -138,6 +139,7 @@ export default async function AdminBlogPage({
                 name: true,
                 phone: true,
                 email: true,
+                phoneVerified: true,
               },
             },
           },
@@ -288,9 +290,27 @@ export default async function AdminBlogPage({
                   <p className="font-medium text-slate-700">
                     {post.brand?.name ?? post.authorProfile?.displayName ?? "Unattributed"}
                   </p>
-                  <p className="text-xs text-slate-400">
-                    {post.brand ? "Brand" : "Contributor"}
-                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs text-slate-400">
+                      {post.brand ? "Brand" : "Contributor"}
+                    </span>
+                    {post.authorProfile?.user && (
+                      post.authorProfile.user.phoneVerified ? (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200/60">
+                          ✓ Phone Verified
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 border border-amber-200/60">
+                          ⚠ Phone Unverified
+                        </span>
+                      )
+                    )}
+                  </div>
+                  {post.authorProfile?.user?.phone && (
+                    <p className="text-[11px] text-slate-500 mt-0.5 font-mono">
+                      +91-{post.authorProfile.user.phone}
+                    </p>
+                  )}
                 </td>
                 <td className="p-4">
                   <Badge className={statusStyles[post.status as BlogStatus]}>

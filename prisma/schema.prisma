@@ -19,6 +19,7 @@ model User {
   role                     Role                      @default(USER)
   isActive                 Boolean                   @default(true)
   emailVerified            Boolean                   @default(false)
+  phoneVerified            Boolean                   @default(false)
   onboardingCompleted      Boolean                   @default(false)
   lastLoginAt              DateTime?
   pushToken                String?
@@ -2036,6 +2037,8 @@ model BlogPost {
   //-----------------------------------
 
   submittedAt DateTime?
+  phoneVerificationReminderCount Int @default(0)
+  lastPhoneReminderAt DateTime?
 
   reviewedAt DateTime?
 

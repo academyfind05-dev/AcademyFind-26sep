@@ -21,6 +21,7 @@ import {
   FileText,
   ImagePlus,
   Loader2,
+  Phone,
   Plus,
   Send,
   Trash2,
@@ -58,6 +59,8 @@ import { saveAdminBlogPost, deleteAdminBlogPost } from "@/lib/User/admin/admin-b
 import { saveBlogPost } from "@/lib/User/user/blog/saveblogpost";
 import { deleteBlogPost } from "@/lib/User/user/blog/deleteblogpost";
 import { uploadImage } from "./utils/uploadImage";
+import PhoneOtpModal from "@/components/auth/PhoneOtpModal";
+import { getPhoneVerificationStatus } from "@/lib/auth/phone-session";
 
 import Editor from "./Editor";
 import type {
@@ -150,6 +153,28 @@ export default function BlogEditorForm({
     "saved" | "saving" | "unsaved"
   >("saved");
   const [status, setStatus] = useState(initialData?.status ?? "DRAFT");
+
+  // Phone gate: shown before allowing blog publish if phone not verified
+  const [isPhoneGateOpen, setIsPhoneGateOpen] = useState(false);
+  const [phoneGatePhone, setPhoneGatePhone] = useState<string | undefined>(undefined);
+  const [pendingVerifyPostId, setPendingVerifyPostId] = useState<string | undefined>(initialData?.id);
+
+  // Auto-prompt verification modal if URL contains verifyPhone=true
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("verifyPhone") === "true" && management !== "admin") {
+      getPhoneVerificationStatus().then((status) => {
+        if (!status.phoneVerified) {
+          setPendingVerifyPostId(postId);
+          setPhoneGatePhone(status.phone ?? undefined);
+          setIsPhoneGateOpen(true);
+        } else {
+          toast.success("Your phone is verified! You can publish your article anytime.");
+        }
+      });
+    }
+  }, [postId, management]);
 
   // Prevent accidental tab closing if there are unsaved changes
   useEffect(() => {
@@ -364,7 +389,7 @@ export default function BlogEditorForm({
     markUnsaved();
   };
 
-  const submit = (intent: "draft" | "publish") => {
+  const submit = async (intent: "draft" | "publish") => {
     if (form.title.trim().length < 3) {
       toast.error("Add a title with at least 3 characters.");
       return;
@@ -391,6 +416,37 @@ export default function BlogEditorForm({
     if (incompleteFaq) {
       toast.error("Complete or remove each FAQ before saving.");
       return;
+    }
+
+    // Phone gate: only check for non-admin publish intents
+    if (intent === "publish" && management !== "admin") {
+      const phoneStatus = await getPhoneVerificationStatus();
+      if (!phoneStatus.phoneVerified) {
+        // Auto-save the post as DRAFT first so nothing is lost and we have a persistent postId
+        let currentPostId = postId;
+        try {
+          const draftPayload: BlogEditorSaveInput = {
+            ...form,
+            id: postId,
+            intent: "draft",
+            faqs: faqs.map(({ question, answer }) => ({ question, answer })),
+            relatedInstituteId,
+          };
+          const draftRes = await saveBlogPost(draftPayload);
+          if (draftRes.success && draftRes.id) {
+            currentPostId = draftRes.id;
+            setPostId(draftRes.id);
+            setSaveState("saved");
+          }
+        } catch {
+          // ignore draft auto-save error and still allow verification
+        }
+
+        setPendingVerifyPostId(currentPostId);
+        setPhoneGatePhone(phoneStatus.phone ?? undefined);
+        setIsPhoneGateOpen(true);
+        return;
+      }
     }
 
     setSaveState("saving");
@@ -478,11 +534,118 @@ export default function BlogEditorForm({
         toast.error(res.error || "Failed to delete post.");
         setSaveState("unsaved");
       }
-    } catch (err) {
+    } catch {
       toast.error("An error occurred while deleting the post.");
       setSaveState("unsaved");
     }
   };
+
+  // Called after phone is verified via the gate modal — proceed with pending publish
+  const handlePhoneGateVerified = useCallback(async (idToken: string) => {
+    try {
+      const res = await fetch("/api/auth/verify-phone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Phone verified! Submitting your blog post...");
+        setIsPhoneGateOpen(false);
+        // Proceed with the actual publish now that phone is verified
+        setSaveState("saving");
+        startTransition(async () => {
+          const payload: BlogEditorSaveInput = {
+            ...form,
+            id: postId,
+            intent: "publish",
+            faqs: faqs.map(({ question, answer }) => ({ question, answer })),
+            relatedInstituteId,
+          };
+          const result = await saveBlogPost(payload);
+          if (!result.success) {
+            setSaveState("unsaved");
+            if (!result.success) toast.error(result.error);
+            return;
+          }
+          setPostId(result.id);
+          setStatus("PENDING_REVIEW");
+          setSaveState("saved");
+          toast.success("Post submitted for review.");
+          if (management !== "admin") router.push(`/blog/${result.slug}`);
+        });
+      } else {
+        toast.error(data.error ?? "Phone verification failed.");
+        setIsPhoneGateOpen(false);
+      }
+    } catch {
+      toast.error("Verification error. Please try again.");
+      setIsPhoneGateOpen(false);
+    }
+  }, [form, postId, faqs, relatedInstituteId, management, router, startTransition]);
+
+  // Called when user closes/backs off the phone verification modal without verifying
+  const handlePhoneGateClose = useCallback(async () => {
+    setIsPhoneGateOpen(false);
+
+    const targetPostId = pendingVerifyPostId || postId;
+    if (targetPostId) {
+      // 1. Show interactive on-screen toast with a direct action link
+      toast(
+        (t) => (
+          <div className="flex items-start gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
+              <Phone className="h-4 w-4 text-amber-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-slate-900">Article Saved as Draft</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Verify your phone number anytime to submit this article for review.
+              </p>
+              <button
+                type="button"
+                className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-amber-600 hover:text-amber-700"
+                onClick={() => {
+                  toast.dismiss(t.id);
+                  setIsPhoneGateOpen(true);
+                }}
+              >
+                Verify now &rarr;
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => toast.dismiss(t.id)}
+              className="text-slate-400 hover:text-slate-600"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ),
+        {
+          duration: 9000,
+          style: {
+            background: "#fffbeb",
+            border: "1px solid #fde68a",
+            borderRadius: "12px",
+            padding: "12px 14px",
+            maxWidth: "380px",
+          },
+        }
+      );
+
+      // 2. Call backend to trigger In-App Notification, Admin Notification, and Email #1
+      try {
+        await fetch("/api/blog/abandon-phone-verification", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ postId: targetPostId }),
+        });
+      } catch (err) {
+        console.error("Failed to notify verification abandonment:", err);
+      }
+    }
+  }, [pendingVerifyPostId, postId]);
 
   const actionButtons = (
     <>
@@ -1253,6 +1416,16 @@ export default function BlogEditorForm({
         description="This action cannot be undone."
         destructive={true}
         confirmText="Delete Post"
+      />
+
+      {/* Phone verification gate — shown before blog publish if phone not verified */}
+      <PhoneOtpModal
+        isOpen={isPhoneGateOpen}
+        onClose={handlePhoneGateClose}
+        onVerified={handlePhoneGateVerified}
+        defaultPhone={phoneGatePhone}
+        title="Verify Phone to Publish"
+        subtitle="A verified phone number is required to submit blog posts on AcademyFind. This helps us ensure content quality."
       />
     </main>
   );

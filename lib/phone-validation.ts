@@ -71,6 +71,14 @@ export function validateIndianPhoneNumber(rawPhone: string | null | undefined): 
     };
   }
 
+  // Allow official Firebase test number in development
+  if (process.env.NODE_ENV === "development" && cleaned === "9999999999") {
+    return {
+      isValid: true,
+      cleanedPhone: cleaned,
+    };
+  }
+
   // 5. Check for all identical digits (e.g., 9999999999, 8888888888)
   if (/^(\d)\1{9}$/.test(cleaned)) {
     return {

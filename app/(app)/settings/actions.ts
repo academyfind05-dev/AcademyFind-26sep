@@ -109,9 +109,20 @@ export async function updateProfile(
   });
   if (conflict) return { success: false, message: "Username is unavailable." };
 
+  const existingUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { phone: true, phoneVerified: true },
+  });
+
+  const phoneChanged = existingUser?.phone !== parsed.data.phone;
+
   await prisma.user.update({
     where: { id: session.user.id },
-    data: parsed.data,
+    data: {
+      ...parsed.data,
+      // Reset verification if the phone number was changed
+      ...(phoneChanged ? { phoneVerified: false } : {}),
+    },
   });
   await checkAndAwardProfileCompletion(session.user.id);
   revalidatePath("/settings/profile");
