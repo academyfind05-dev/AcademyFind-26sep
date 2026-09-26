@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { firebaseAuth } from "@/lib/firebase-admin";
+import { firebaseAuth, getFirebaseAuth } from "@/lib/firebase-admin";
 import { prisma } from "@/lib/prisma";
 import { getCachedSession } from "@/lib/auth/session";
 import { validateIndianPhoneNumber } from "@/lib/phone-validation";
@@ -34,15 +34,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!firebaseAuth) {
+    const auth = getFirebaseAuth() || firebaseAuth;
+    if (!auth) {
       return NextResponse.json(
-        { success: false, error: "Phone verification service is unavailable." },
+        { success: false, error: "Phone verification service configuration missing on server (check Firebase Admin credentials)." },
         { status: 503 }
       );
     }
 
     // Verify the Firebase ID token server-side (cannot be forged by the client)
-    const decoded = await firebaseAuth.verifyIdToken(idToken);
+    const decoded = await auth.verifyIdToken(idToken);
     const phoneNumber = decoded.phone_number;
 
     if (!phoneNumber) {
@@ -92,7 +93,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, phone: cleanedPhone });
   } catch (err: unknown) {
     console.error("[verify-phone] Error:", err);
-    const code = (err as { code?: string })?.code;
+    const errObj = err as { code?: string; message?: string };
+    const code = errObj?.code;
     if (code?.startsWith("auth/")) {
       return NextResponse.json(
         { success: false, error: "OTP verification failed. Please try again." },
@@ -100,7 +102,7 @@ export async function POST(req: NextRequest) {
       );
     }
     return NextResponse.json(
-      { success: false, error: "An unexpected error occurred." },
+      { success: false, error: errObj?.message || "An unexpected error occurred." },
       { status: 500 }
     );
   }

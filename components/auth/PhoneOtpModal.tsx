@@ -184,8 +184,10 @@ function PhoneOtpModalContent({
       const result = await confirmation.confirm(otp);
       const idToken = await result.user.getIdToken();
       const verifiedPhone = phone.replace(/\D/g, "").slice(0, 10);
-      setStep("success");
-      await onVerified(idToken, verifiedPhone);
+      const success = await onVerified(idToken, verifiedPhone);
+      if (success !== false) {
+        setStep("success");
+      }
     } catch (err: unknown) {
       console.error("[PhoneOtpModal] verifyOtp error:", err);
       const code = (err as { code?: string })?.code;
@@ -194,7 +196,7 @@ function PhoneOtpModalContent({
           ? "Incorrect OTP. Please check and try again."
           : code === "auth/code-expired"
           ? "OTP has expired. Please request a new one."
-          : "Verification failed. Please try again.";
+          : (err as Error)?.message || "Verification failed. Please try again.";
       toast.error(msg);
       setOtp("");
       otpRefs.current[0]?.focus();

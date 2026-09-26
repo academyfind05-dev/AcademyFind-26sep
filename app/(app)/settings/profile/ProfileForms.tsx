@@ -63,20 +63,27 @@ export function ProfileForms({ user, student, teacher }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idToken }),
       });
-      const data = await res.json();
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        toast.error(`Server error (${res.status}). Please try again.`);
+        return false;
+      }
 
-      if (data.success) {
+      if (data?.success) {
         setPhoneVerified(true);
         setCurrentPhone(phone);
         toast.success("Phone number verified successfully! ✓");
         setIsVerifyModalOpen(false);
+        return true;
       } else {
-        toast.error(data.error ?? "Verification failed. Please try again.");
-        setIsVerifyModalOpen(false);
+        toast.error(data?.error ?? "Verification failed. Please try again.");
+        return false;
       }
     } catch {
-      toast.error("An error occurred. Please try again.");
-      setIsVerifyModalOpen(false);
+      toast.error("Network error. Please try again.");
+      return false;
     }
   }, []);
 

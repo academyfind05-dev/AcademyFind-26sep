@@ -188,9 +188,17 @@ export default function PhoneNudgeBanner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idToken }),
       });
-      const data = await res.json();
 
-      if (data.success) {
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch (jsonErr) {
+        console.error("[PhoneNudgeBanner] Non-JSON response from server:", res.status, jsonErr);
+        toast.error(`Server error (${res.status}). Could not verify phone number.`);
+        return false;
+      }
+
+      if (data?.success) {
         setPhoneVerified(true);
         setUserPhone(verifiedPhone);
         setNudgeType(null);
@@ -206,11 +214,15 @@ export default function PhoneNudgeBanner() {
             borderRadius: "12px",
           },
         });
+        return true;
       } else {
-        toast.error(data.error ?? "Verification failed. Please try again.");
+        toast.error(data?.error ?? "Verification failed. Please try again.");
+        return false;
       }
-    } catch {
+    } catch (err) {
+      console.error("[PhoneNudgeBanner] Network error:", err);
       toast.error("Network error. Could not verify phone number.");
+      return false;
     }
   }, []);
 

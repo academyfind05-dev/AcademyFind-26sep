@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { firebaseAuth } from "@/lib/firebase-admin";
+import { firebaseAuth, getFirebaseAuth } from "@/lib/firebase-admin";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { validateIndianPhoneNumber } from "@/lib/phone-validation";
@@ -30,15 +30,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!firebaseAuth) {
+    const auth = getFirebaseAuth() || firebaseAuth;
+    if (!auth) {
       return NextResponse.json(
-        { success: false, error: "Phone authentication service is unavailable." },
+        { success: false, error: "Phone authentication service configuration missing on server (check Firebase Admin credentials)." },
         { status: 503 }
       );
     }
 
     // Verify the Firebase ID token server-side
-    const decoded = await firebaseAuth.verifyIdToken(idToken);
+    const decoded = await auth.verifyIdToken(idToken);
     const phoneNumber = decoded.phone_number;
 
     if (!phoneNumber) {

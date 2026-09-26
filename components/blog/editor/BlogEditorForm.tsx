@@ -548,8 +548,15 @@ export default function BlogEditorForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idToken }),
       });
-      const data = await res.json();
-      if (data.success) {
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        toast.error(`Server error (${res.status}). Please try again.`);
+        return false;
+      }
+
+      if (data?.success) {
         toast.success("Phone verified! Submitting your blog post...");
         setIsPhoneGateOpen(false);
         // Proceed with the actual publish now that phone is verified
