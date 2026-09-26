@@ -20,7 +20,7 @@ import {
   X,
   ShieldAlert,
 } from "lucide-react";
-import { toast } from "sonner";
+import toast from "react-hot-toast";
 import { NOTICE_CATEGORY_META, NOTICE_PRIORITY_META, NOTICE_VISIBILITY_META } from "@/components/notices/notice-meta";
 import { adminToggleNoticeActive, adminToggleNoticePin, adminDeleteNoticePermanently } from "./actions";
 
