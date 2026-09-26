@@ -55,25 +55,10 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  // Webpack: also externalize at the bundler level for belt-and-suspenders
-  // This prevents the ERR_REQUIRE_ESM error from jose (used inside firebase-admin)
-  webpack: (config, { isServer }) => {
-    if (isServer) {
-      config.externals = [
-        ...(Array.isArray(config.externals) ? config.externals : config.externals ? [config.externals] : []),
-        "firebase-admin",
-        "firebase-admin/app",
-        "firebase-admin/auth",
-        "firebase-admin/database",
-        "firebase-admin/firestore",
-        "firebase-admin/messaging",
-        "firebase-admin/storage",
-        "jose",
-        "jwks-rsa",
-      ];
-    }
-    return config;
-  },
+  // Turbopack is the default bundler in Next.js 16.
+  // serverExternalPackages above handles firebase-admin externalization natively.
+  // Empty turbopack config suppresses the "webpack config found, no turbopack config" warning.
+  turbopack: {},
 };
 
 export default nextConfig;
