@@ -17,7 +17,7 @@ interface PhoneOtpModalProps {
   /** Called when modal should close (cancelled or error) */
   onClose: () => void;
   /** Called after OTP is verified and server has confirmed. Receives the Firebase idToken. */
-  onVerified: (idToken: string, phone: string) => Promise<void>;
+  onVerified: (idToken: string, phone: string) => Promise<boolean | void>;
   /** Optional: pre-fill phone number (e.g. from profile) */
   defaultPhone?: string;
   /** Title shown at top of modal */
