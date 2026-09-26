@@ -82,7 +82,7 @@ export default async function InstituteNoticesPage({ params, searchParams }: Pro
         items={[
           { label: "Home", href: "/" },
           { label: institute.name, href: `/institute/${institute.slug}` },
-          { label: "Notices" },
+          { label: "Notices", href: "#" },
         ]}
       />
 

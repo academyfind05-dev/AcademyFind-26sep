@@ -35,9 +35,11 @@ const noticeSchema = z.object({
 
 type NoticeInput = z.input<typeof noticeSchema>;
 
-// ─── Access Helpers ───────────────────────────────────────────────────────────
-
-async function assertManagerAccess(userId: string, instituteId: string, userRole: string) {
+async function assertManagerAccess(
+  userId: string,
+  instituteId: string,
+  userRole?: string | null,
+) {
   if (userRole === "ADMIN") return true;
   const mgr = await prisma.instituteManager.findUnique({
     where: { userId_instituteId: { userId, instituteId } },
@@ -49,7 +51,7 @@ async function assertManagerAccess(userId: string, instituteId: string, userRole
 async function assertNoticeOwnership(
   noticeId: string,
   userId: string,
-  userRole: string,
+  userRole?: string | null,
 ) {
   const notice = await prisma.instituteNotice.findUnique({
     where: { id: noticeId },
