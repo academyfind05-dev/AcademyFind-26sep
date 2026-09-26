@@ -219,7 +219,12 @@ export default async function InstitutePage({ params }: PageProps) {
       }
     }),
     prisma.instituteManager.findMany({
-      where: { instituteId: id },
+      where: {
+        instituteId: id,
+        user: {
+          role: { notIn: ["SALES_MANAGER", "INSTITUTE_SALES_MANAGER"] },
+        },
+      },
       include: {
         user: {
           select: { id: true, name: true, username: true, image: true, allowDms: true, chatSettings: { select: { allowDirectMessages: true } } }
@@ -1015,7 +1020,7 @@ export default async function InstitutePage({ params }: PageProps) {
                 <Users className="w-4 h-4 text-emerald-600" />
                 <span>Total Members:</span>
                 <span className="bg-emerald-600 text-white px-2 py-0.5 rounded-full text-xs font-extrabold">
-                  {totalStudents + totalTeachers}
+                  {totalStudents + totalTeachers + instituteManagers.length}
                 </span>
               </div>
               <div className="flex items-center gap-1.5 px-2.5 py-1 text-slate-600 font-semibold">
@@ -1027,6 +1032,15 @@ export default async function InstitutePage({ params }: PageProps) {
                 <UserCheck className="w-3.5 h-3.5 text-emerald-500" />
                 <span>{totalTeachers} Faculty</span>
               </div>
+              {instituteManagers.length > 0 && (
+                <>
+                  <span className="text-slate-300">•</span>
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 text-slate-600 font-semibold">
+                    <Building className="w-3.5 h-3.5 text-amber-500" />
+                    <span>{instituteManagers.length} {instituteManagers.length === 1 ? "Manager" : "Managers"}</span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -1036,7 +1050,7 @@ export default async function InstitutePage({ params }: PageProps) {
                 title="Community" 
                 instituteId={institute.id} 
                 isLoggedIn={!!userId}
-                description={`Unlock with 1 AFC Coin to access full student & faculty profiles, contact details, and direct messaging (${totalStudents + totalTeachers} Members).`} 
+                description={`Unlock with 1 AFC Coin to access full student, faculty & manager profiles, contact details, and direct messaging (${totalStudents + totalTeachers + instituteManagers.length} Members).`} 
               />
 
               <div className="pointer-events-none select-none blur-[1px] opacity-75">

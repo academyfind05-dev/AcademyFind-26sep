@@ -86,7 +86,8 @@ export async function GET(
                 where: {
                     instituteId,
                     user: {
-                        name: { contains: q, mode: "insensitive" }
+                        name: { contains: q, mode: "insensitive" },
+                        role: { notIn: ["SALES_MANAGER", "INSTITUTE_SALES_MANAGER"] },
                     }
                 },
                 take: 20,
