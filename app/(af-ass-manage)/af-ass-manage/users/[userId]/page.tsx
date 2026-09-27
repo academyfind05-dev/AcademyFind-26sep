@@ -84,7 +84,7 @@ export default async function UserDetailsPage({ params }: { params: Promise<{ us
                 
                 {/* LEFT COLUMN: EDIT FORM & REQUESTS */}
                 <div className="lg:col-span-2 space-y-6">
-                    <AdminUserEditForm user={user} />
+                    <AdminUserEditForm user={user} allInstitutes={allInstitutes} />
 
                     {/* Summary Boxes */}
                     <Card className="border-stone-200 shadow-sm overflow-hidden">

@@ -10,22 +10,113 @@ export async function updateAdminUser(userId: string, formData: FormData) {
         const role = formData.get("role") as any;
         const isActive = formData.get("isActive") === "true";
         const canAddInstitute = formData.get("canAddInstitute") === "true";
+        const instituteIdsRaw = formData.get("instituteIds") as string;
 
-        await prisma.user.update({
+        let instituteIds: string[] = [];
+        if (instituteIdsRaw) {
+            try {
+                instituteIds = JSON.parse(instituteIdsRaw);
+            } catch {
+                instituteIds = [];
+            }
+        }
+
+        // Validate: If role is INSTITUTE_MANAGER, minimum 1 institute is required
+        if (role === "INSTITUTE_MANAGER" && (!instituteIds || instituteIds.length === 0)) {
+            return {
+                success: false,
+                error: "At least one institute must be selected for Institute Manager role."
+            };
+        }
+
+        const currentUser = await prisma.user.findUnique({
             where: { id: userId },
-            data: {
-                name,
-                phone,
-                role,
-                isActive,
-                canAddInstitute
+            include: { managedInstitutes: true }
+        });
+
+        if (!currentUser) {
+            return { success: false, error: "User not found." };
+        }
+
+        await prisma.$transaction(async (tx) => {
+            // 1. Update basic user fields
+            await tx.user.update({
+                where: { id: userId },
+                data: {
+                    name,
+                    phone,
+                    role,
+                    isActive,
+                    canAddInstitute
+                }
+            });
+
+            // 2. Role handling: If role is NOT INSTITUTE_MANAGER, remove from all institutes automatically
+            if (role !== "INSTITUTE_MANAGER") {
+                await tx.instituteManager.deleteMany({
+                    where: { userId }
+                });
+                await tx.instituteMembership.deleteMany({
+                    where: { userId, role: "ADMIN" }
+                });
+            } else {
+                // Role is INSTITUTE_MANAGER: sync selected institutes
+                // Remove unselected institutes
+                await tx.instituteManager.deleteMany({
+                    where: {
+                        userId,
+                        instituteId: { notIn: instituteIds }
+                    }
+                });
+                await tx.instituteMembership.deleteMany({
+                    where: {
+                        userId,
+                        role: "ADMIN",
+                        instituteId: { notIn: instituteIds }
+                    }
+                });
+
+                // Upsert selected institutes
+                for (const instId of instituteIds) {
+                    await tx.instituteManager.upsert({
+                        where: {
+                            userId_instituteId: { userId, instituteId: instId }
+                        },
+                        create: { userId, instituteId: instId },
+                        update: {}
+                    });
+
+                    const existingMembership = await tx.instituteMembership.findFirst({
+                        where: { userId, instituteId: instId, role: "ADMIN" }
+                    });
+
+                    if (!existingMembership) {
+                        await tx.instituteMembership.create({
+                            data: {
+                                userId,
+                                instituteId: instId,
+                                role: "ADMIN",
+                                status: "ACTIVE",
+                                joinedAt: new Date()
+                            }
+                        });
+                    }
+                }
             }
         });
 
         revalidatePath(`/af-ass-manage/users/${userId}`);
         revalidatePath(`/af-ass-manage/users`);
 
-        return { success: true, message: "User profile updated successfully!" };
+        const hadInstitutes = currentUser.managedInstitutes.length > 0;
+        const removedFromInstitutes = role !== "INSTITUTE_MANAGER" && hadInstitutes;
+
+        return { 
+            success: true, 
+            message: removedFromInstitutes
+                ? "User role updated and automatically removed from all institutes!" 
+                : "User profile updated successfully!" 
+        };
     } catch (error) {
         console.error("Update User Error:", error);
         return { success: false, error: "Failed to update user details." };
@@ -81,6 +172,29 @@ export async function removeManagerRelation(userId: string, instituteId: string)
                 userId_instituteId: { userId, instituteId }
             }
         });
+
+        await prisma.instituteMembership.deleteMany({
+            where: {
+                userId,
+                instituteId,
+                role: 'ADMIN'
+            }
+        });
+
+        // Check if user has any remaining managed institutes
+        const remainingCount = await prisma.instituteManager.count({
+            where: { userId }
+        });
+
+        if (remainingCount === 0) {
+            const user = await prisma.user.findUnique({ where: { id: userId } });
+            if (user && user.role === 'INSTITUTE_MANAGER') {
+                await prisma.user.update({
+                    where: { id: userId },
+                    data: { role: 'USER' }
+                });
+            }
+        }
 
         revalidatePath(`/af-ass-manage/users/${userId}`);
         return { success: true, message: "Manager access removed." };

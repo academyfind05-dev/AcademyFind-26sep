@@ -21,11 +21,26 @@ export async function toggleUserListingPermission(userId: string, newStatus: boo
 // 1. Role Change Action
 export async function updateUserRole(userId: string, newRole: "USER" | "SALES_MANAGER" | "INSTITUTE_MANAGER" | "INSTITUTE_SALES_MANAGER" | "ADMIN" ) {
     try {
+        if (newRole === "INSTITUTE_MANAGER") {
+            const count = await prisma.instituteManager.count({ where: { userId } });
+            if (count === 0) {
+                return {
+                    success: false,
+                    error: "Cannot set Institute Manager role: User has 0 assigned institutes. Please assign an institute in user details first."
+                };
+            }
+        } else {
+            // Remove from all institutes if role is changed to non-manager
+            await prisma.instituteManager.deleteMany({ where: { userId } });
+            await prisma.instituteMembership.deleteMany({ where: { userId, role: "ADMIN" } });
+        }
+
         await prisma.user.update({
             where: { id: userId },
             data: { role: newRole }
         });
         revalidatePath("/af-ass-manage/users");
+        revalidatePath(`/af-ass-manage/users/${userId}`);
         return { success: true, message: `User role updated to ${newRole}!` };
     } catch (error) {
         console.error(error);
