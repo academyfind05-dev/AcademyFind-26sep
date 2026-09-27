@@ -202,3 +202,32 @@ export async function removeManagerRelation(userId: string, instituteId: string)
         return { success: false, error: "Failed to remove access." };
     }
 }
+
+export async function searchInstitutesForAdmin(query: string) {
+    if (!query || query.trim().length < 2) return [];
+    try {
+        const results = await prisma.institute.findMany({
+            where: {
+                name: {
+                    contains: query.trim(),
+                    mode: "insensitive"
+                }
+            },
+            select: {
+                id: true,
+                name: true,
+                city: { select: { name: true } }
+            },
+            take: 15,
+            orderBy: { name: "asc" }
+        });
+
+        return results.map((r) => ({
+            id: r.id,
+            name: r.city?.name ? `${r.name} (${r.city.name})` : r.name
+        }));
+    } catch (error) {
+        console.error("Search institutes error:", error);
+        return [];
+    }
+}

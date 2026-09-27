@@ -32,12 +32,6 @@ export default async function UserDetailsPage({ params }: { params: Promise<{ us
 
     if (!user) notFound();
 
-    // 2. Fetch ALL Institutes for the assignment dropdown (Lightweight fetch)
-    const allInstitutes = await prisma.institute.findMany({
-        select: { id: true, name: true },
-        orderBy: { name: 'asc' }
-    });
-
     return (
         <div className="w-full space-y-6 pb-12 font-sans">
             
@@ -84,7 +78,7 @@ export default async function UserDetailsPage({ params }: { params: Promise<{ us
                 
                 {/* LEFT COLUMN: EDIT FORM & REQUESTS */}
                 <div className="lg:col-span-2 space-y-6">
-                    <AdminUserEditForm user={user} allInstitutes={allInstitutes} />
+                    <AdminUserEditForm user={user} />
 
                     {/* Summary Boxes */}
                     <Card className="border-stone-200 shadow-sm overflow-hidden">
@@ -157,7 +151,6 @@ export default async function UserDetailsPage({ params }: { params: Promise<{ us
                     <ManagerControl 
                         userId={user.id} 
                         managedInstitutes={user.managedInstitutes} 
-                        allInstitutes={allInstitutes} 
                     />
 
                     {/* Recent View History */}
