@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { firebaseAuth, getFirebaseAuth } from "@/lib/firebase-admin";
 import { prisma } from "@/lib/prisma";
 import { getCachedSession } from "@/lib/auth/session";
+import { getMobileUserId } from "@/lib/auth/getMobileUserId";
 import { validateIndianPhoneNumber } from "@/lib/phone-validation";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -16,8 +17,15 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    let userId: string | null = null;
     const session = await getCachedSession();
-    if (!session?.user?.id) {
+    if (session?.user?.id) {
+      userId = session.user.id;
+    } else {
+      userId = await getMobileUserId(req);
+    }
+
+    if (!userId) {
       return NextResponse.json(
         { success: false, error: "You must be logged in to verify your phone." },
         { status: 401 }
@@ -69,7 +77,7 @@ export async function POST(req: NextRequest) {
     const existingUser = await prisma.user.findFirst({
       where: {
         phone: cleanedPhone,
-        id: { not: session.user.id },
+        id: { not: userId },
       },
       select: { id: true },
     });
@@ -83,7 +91,7 @@ export async function POST(req: NextRequest) {
 
     // Update the user: set phone + phoneVerified = true
     await prisma.user.update({
-      where: { id: session.user.id },
+      where: { id: userId },
       data: {
         phone: cleanedPhone,
         phoneVerified: true,

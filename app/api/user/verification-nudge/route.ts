@@ -1,19 +1,25 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getCachedSession } from "@/lib/auth/session";
+import { getMobileUserId } from "@/lib/auth/getMobileUserId";
 import { prisma } from "@/lib/prisma";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    let userId: string | null = null;
     const session = await getCachedSession();
-    if (!session?.user?.id) {
+    if (session?.user?.id) {
+      userId = session.user.id;
+    } else {
+      userId = await getMobileUserId(request);
+    }
+
+    if (!userId) {
       return NextResponse.json({
         authenticated: false,
         shouldNudge: false,
         hasWrittenBlog: false,
       });
     }
-
-    const userId = session.user.id;
 
     // Check if user has written, submitted, or published any blog post
     const [user, blogCount] = await Promise.all([

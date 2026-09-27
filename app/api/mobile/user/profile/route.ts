@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
       where: { id: userId },
       select: {
         id: true, name: true, email: true, image: true, role: true,
-        phone: true, username: true,
+        phone: true, phoneVerified: true, username: true,
         createdAt: true, updatedAt: true,
         studentProfile: true,
         teacherProfile: true,
