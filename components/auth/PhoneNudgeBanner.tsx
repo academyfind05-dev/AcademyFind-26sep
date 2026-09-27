@@ -2,21 +2,29 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import toast from "react-hot-toast";
-import { Phone, Mail, X, ShieldCheck, ArrowRight } from "lucide-react";
+import { Phone, Mail, X, ShieldCheck, ArrowRight, FileText } from "lucide-react";
 import Link from "next/link";
-import { authClient } from "@/lib/auth/auth-client";
 import PhoneOtpModal from "./PhoneOtpModal";
 
 type NudgeType = "phone" | "email" | null;
 
+interface VerificationNudgeResponse {
+  authenticated: boolean;
+  shouldNudge: boolean;
+  nudgeType: NudgeType;
+  phone?: string;
+  phoneVerified?: boolean;
+  email?: string;
+  hasWrittenBlog: boolean;
+  blogCount?: number;
+}
+
 /**
  * PhoneNudgeBanner
  *
- * Shown to logged-in users who are missing a verified phone or email:
- * - Email-login user with no verified phone → Prompt & toast every refresh/visit until verified
- * - Phone-login user with no email → Nudge to add & verify email
- *
- * Clicking "Verify Phone" opens the PhoneOtpModal directly on the screen without leaving the page.
+ * Exclusively targeted to users who have written, submitted, or published a blog:
+ * - Hidden completely for regular students, visitors, and users without blog activity.
+ * - For blog authors: Nudges to verify phone/email so the AcademyFind team can reach them.
  */
 export default function PhoneNudgeBanner() {
   const [nudgeType, setNudgeType] = useState<NudgeType>(null);
@@ -29,26 +37,35 @@ export default function PhoneNudgeBanner() {
   useEffect(() => {
     let isMounted = true;
 
-    async function checkSession() {
+    async function checkNudgeEligibility() {
       try {
-        const { data: session } = await authClient.getSession();
-        if (!isMounted || !session?.user) return;
+        const res = await fetch("/api/user/verification-nudge");
+        if (!res.ok || !isMounted) return;
 
-        const user = session.user as {
-          phone?: string | null;
-          phoneVerified?: boolean;
-          email?: string | null;
-        };
+        const data: VerificationNudgeResponse = await res.json();
+        if (!isMounted) return;
 
-        const isVerified: boolean = user.phoneVerified ?? false;
-        setUserPhone(user.phone ?? "");
-        setPhoneVerified(isVerified);
+        // Strictly verify that the user has written, submitted, or published a blog
+        if (!data.authenticated || !data.hasWrittenBlog || !data.shouldNudge) {
+          setNudgeType(null);
+          return;
+        }
 
-        // Case 1: Phone not verified -> notify every visit / refresh until verified
-        if (!isVerified) {
-          if (isMounted) setNudgeType("phone");
+        // Check if user already dismissed for this browsing session
+        const sessionDismissed = sessionStorage.getItem("af_blog_author_nudge_dismissed");
+        if (sessionDismissed === "true") {
+          setDismissed(true);
+        }
 
-          // Trigger toast notification on every visit / refresh
+        setUserPhone(data.phone ?? "");
+        setPhoneVerified(Boolean(data.phoneVerified));
+        setNudgeType(data.nudgeType);
+
+        // Don't show toast if dismissed in this session
+        if (sessionDismissed === "true") return;
+
+        // Case 1: Phone not verified for blog author
+        if (data.nudgeType === "phone") {
           toastTimeoutRef.current = setTimeout(() => {
             if (!isMounted) return;
 
@@ -64,13 +81,14 @@ export default function PhoneNudgeBanner() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-1">
-                      <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100/80 px-1.5 py-0.5 rounded">
-                        Action Required
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100/90 px-1.5 py-0.5 rounded">
+                        <FileText className="h-2.5 w-2.5" /> Blog Author
                       </span>
                       <button
                         type="button"
                         onClick={() => toast.dismiss(t.id)}
-                        className="text-slate-400 hover:text-slate-600 p-0.5 rounded-full transition-colors"
+                        className="text-slate-400 hover:text-slate-600 p-0.5 rounded-full transition-colors cursor-pointer"
+                        aria-label="Close notification"
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
@@ -79,7 +97,7 @@ export default function PhoneNudgeBanner() {
                       Verify Your Phone Number
                     </p>
                     <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
-                      Add and verify your mobile number to publish blogs and secure your account.
+                      You have blog articles on AcademyFind. Please verify your mobile number so our team can reach you regarding publication.
                     </p>
                     <div className="mt-2.5 flex items-center gap-2">
                       <button
@@ -88,10 +106,10 @@ export default function PhoneNudgeBanner() {
                           toast.dismiss(t.id);
                           setIsOtpModalOpen(true);
                         }}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-semibold text-xs px-3 py-1.5 shadow-sm shadow-amber-500/25 transition-all"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-semibold text-xs px-3 py-1.5 shadow-sm shadow-amber-500/25 transition-all cursor-pointer"
                       >
                         <ShieldCheck className="h-3.5 w-3.5" />
-                        Verify Now
+                        Verify Phone
                       </button>
                       <Link
                         href="/settings/profile"
@@ -110,64 +128,68 @@ export default function PhoneNudgeBanner() {
                 position: "top-center",
               }
             );
-          }, 1200);
-        } else if (
-          isVerified &&
-          (!user.email || user.email.endsWith("@phone.academyfind.com"))
-        ) {
-          // Case 2: Email nudge: registered with phone, no real email attached
-          if (isMounted) setNudgeType("email");
-
+          }, 1500);
+        } else if (data.nudgeType === "email") {
+          // Case 2: Email missing for blog author
           toastTimeoutRef.current = setTimeout(() => {
             if (!isMounted) return;
-            toast(
+
+            toast.custom(
               (t) => (
-                <div className="flex items-start gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
-                    <Mail className="h-4 w-4 text-amber-600" />
+                <div
+                  className={`flex items-start gap-3 w-full max-w-sm bg-amber-50/95 backdrop-blur-md border border-amber-300 shadow-xl shadow-amber-900/10 rounded-2xl p-3.5 text-slate-800 transition-all ${
+                    t.visible ? "animate-in fade-in slide-in-from-top-3" : "animate-out fade-out"
+                  }`}
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-md shadow-amber-500/25">
+                    <Mail className="h-4 w-4" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-900">Add Your Email Address</p>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Link an email to recover your account and receive important updates.
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100/90 px-1.5 py-0.5 rounded">
+                        <FileText className="h-2.5 w-2.5" /> Blog Author
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => toast.dismiss(t.id)}
+                        className="text-slate-400 hover:text-slate-600 p-0.5 rounded-full transition-colors cursor-pointer"
+                        aria-label="Close notification"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <p className="text-sm font-bold text-slate-900 mt-1">
+                      Add Your Email Address
                     </p>
-                    <Link
-                      href="/settings/profile"
-                      className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-amber-600 hover:text-amber-700"
-                      onClick={() => toast.dismiss(t.id)}
-                    >
-                      Add Email now <ArrowRight className="h-3 w-3" />
-                    </Link>
+                    <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
+                      You have blog articles on AcademyFind. Please add your email so our editorial team can contact you.
+                    </p>
+                    <div className="mt-2.5 flex items-center gap-2">
+                      <Link
+                        href="/settings/profile"
+                        onClick={() => toast.dismiss(t.id)}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-semibold text-xs px-3 py-1.5 shadow-sm shadow-amber-500/25 transition-all"
+                      >
+                        Add Email <ArrowRight className="h-3 w-3" />
+                      </Link>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => toast.dismiss(t.id)}
-                    className="text-slate-400 hover:text-slate-600"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
                 </div>
               ),
               {
                 id: "af-email-nudge",
-                duration: 8000,
-                style: {
-                  background: "#fffbeb",
-                  border: "1px solid #fde68a",
-                  borderRadius: "12px",
-                  padding: "12px 14px",
-                  maxWidth: "360px",
-                },
+                duration: 9000,
+                position: "top-center",
               }
             );
           }, 1500);
         }
-      } catch {
-        // Silently catch network or session errors
+      } catch (err) {
+        console.error("[PhoneNudgeBanner] Failed to check eligibility:", err);
       }
     }
 
-    checkSession();
+    checkNudgeEligibility();
 
     return () => {
       isMounted = false;
@@ -179,6 +201,11 @@ export default function PhoneNudgeBanner() {
 
   const handleDismiss = useCallback(() => {
     setDismissed(true);
+    try {
+      sessionStorage.setItem("af_blog_author_nudge_dismissed", "true");
+    } catch {
+      // ignore storage errors
+    }
   }, []);
 
   const handlePhoneVerified = useCallback(async (idToken: string, verifiedPhone: string) => {
@@ -236,11 +263,11 @@ export default function PhoneNudgeBanner() {
           defaultPhone={userPhone}
           onVerified={handlePhoneVerified}
           title="Verify Your Phone"
-          subtitle="Add and verify your mobile number to submit blogs and secure your account."
+          subtitle="Add and verify your mobile number so our team can reach you regarding your blog articles."
         />
       )}
 
-      {/* Top Banner (shows on every visit/refresh if unverified) */}
+      {/* Top Banner (shows ONLY to blog authors who are unverified) */}
       {nudgeType && !dismissed && (
         <div className="relative z-50 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 border-b border-amber-200/80 shadow-xs">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2 sm:px-6">
@@ -255,11 +282,11 @@ export default function PhoneNudgeBanner() {
               <p className="truncate text-xs font-medium text-amber-950">
                 {nudgeType === "phone" ? (
                   <>
-                    <span className="font-bold text-amber-900">Verify your phone number</span> — required for blog submission &amp; account security.
+                    <span className="font-bold text-amber-900">Blog Author Action:</span> Verify your phone number so our editorial team can reach you regarding your articles.
                   </>
                 ) : (
                   <>
-                    <span className="font-bold text-amber-900">Add your email</span> — so you can recover your account anytime.
+                    <span className="font-bold text-amber-900">Blog Author Action:</span> Add your email so our editorial team can reach you regarding your articles.
                   </>
                 )}
               </p>
@@ -287,7 +314,7 @@ export default function PhoneNudgeBanner() {
                 type="button"
                 onClick={handleDismiss}
                 aria-label="Dismiss banner"
-                className="rounded-full p-1 text-amber-700/60 hover:bg-amber-100 hover:text-amber-900 transition-colors"
+                className="rounded-full p-1 text-amber-700/60 hover:bg-amber-100 hover:text-amber-900 transition-colors cursor-pointer"
               >
                 <X className="h-3.5 w-3.5" />
               </button>

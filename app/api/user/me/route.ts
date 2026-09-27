@@ -23,7 +23,10 @@ export async function GET() {
                     select: {
                         id: true,
                         username: true,
-                        displayName: true
+                        displayName: true,
+                        _count: {
+                            select: { posts: true }
+                        }
                     }
                 },
                 wallet: {
