@@ -142,6 +142,9 @@ export default async function InstitutePage({ params }: PageProps) {
     });
   }
 
+  const isNoticeBoardEligible =
+    institute.subscriptionPlan === "PREMIUM" || institute.subscriptionPlan === "ULTRA";
+
   // Current user's memberships at this institute
   const [
     userMemberships,
@@ -277,50 +280,54 @@ export default async function InstitutePage({ params }: PageProps) {
         return new Set([...students.map((s: any) => s.batchId), ...teachers.map((t: any) => t.batchId)]);
       })
       : Promise.resolve(new Set<string>()),
-    prisma.instituteNotice.findMany({
-      where: {
-        instituteId: id,
-        isActive: true,
-        visibility: "PUBLIC",
-        OR: [
-          { expiresAt: null },
-          { expiresAt: { gt: new Date() } }
-        ]
-      },
-      orderBy: [
-        { isPinned: "desc" },
-        { createdAt: "desc" }
-      ],
-      take: 5,
-      select: {
-        id: true,
-        title: true,
-        body: true,
-        category: true,
-        priority: true,
-        isPinned: true,
-        expiresAt: true,
-        attachmentUrl: true,
-        createdAt: true,
-        author: {
+    isNoticeBoardEligible
+      ? prisma.instituteNotice.findMany({
+          where: {
+            instituteId: id,
+            isActive: true,
+            visibility: "PUBLIC",
+            OR: [
+              { expiresAt: null },
+              { expiresAt: { gt: new Date() } }
+            ]
+          },
+          orderBy: [
+            { isPinned: "desc" },
+            { createdAt: "desc" }
+          ],
+          take: 5,
           select: {
-            name: true,
-            image: true,
+            id: true,
+            title: true,
+            body: true,
+            category: true,
+            priority: true,
+            isPinned: true,
+            expiresAt: true,
+            attachmentUrl: true,
+            createdAt: true,
+            author: {
+              select: {
+                name: true,
+                image: true,
+              }
+            }
           }
-        }
-      }
-    }),
-    prisma.instituteNotice.count({
-      where: {
-        instituteId: id,
-        isActive: true,
-        visibility: "PUBLIC",
-        OR: [
-          { expiresAt: null },
-          { expiresAt: { gt: new Date() } }
-        ]
-      }
-    }),
+        })
+      : Promise.resolve([]),
+    isNoticeBoardEligible
+      ? prisma.instituteNotice.count({
+          where: {
+            instituteId: id,
+            isActive: true,
+            visibility: "PUBLIC",
+            OR: [
+              { expiresAt: null },
+              { expiresAt: { gt: new Date() } }
+            ]
+          }
+        })
+      : Promise.resolve(0),
   ]);
 
   const formattedBlogs: BlogCardPost[] = recentBlogs.map((blog: any) => ({
@@ -768,13 +775,15 @@ export default async function InstitutePage({ params }: PageProps) {
                 )}
               </div>
 
-              {/* ── NOTICE BOARD (PRIMARY TOP PLACEMENT) ── */}
-              <NoticeBoardSection
-                notices={publicNotices}
-                instituteName={institute.name}
-                instituteSlug={idSlug}
-                totalCount={totalPublicNotices}
-              />
+              {/* ── NOTICE BOARD (PRIMARY TOP PLACEMENT - PREMIUM / ULTRA ONLY) ── */}
+              {isNoticeBoardEligible && (
+                <NoticeBoardSection
+                  notices={publicNotices}
+                  instituteName={institute.name}
+                  instituteSlug={idSlug}
+                  totalCount={totalPublicNotices}
+                />
+              )}
             </div>
 
             {/* Sticky CTA */}

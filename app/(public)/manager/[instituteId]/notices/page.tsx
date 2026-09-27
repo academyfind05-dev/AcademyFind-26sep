@@ -18,7 +18,7 @@ export default async function ManagerNoticesPage({ params }: Props) {
 
   const institute = await prisma.institute.findUnique({
     where: { id: instituteId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, subscriptionPlan: true },
   });
   if (!institute) notFound();
 
@@ -46,6 +46,7 @@ export default async function ManagerNoticesPage({ params }: Props) {
     <NoticeBoardManager
       instituteId={instituteId}
       instituteName={institute.name}
+      subscriptionPlan={institute.subscriptionPlan}
       initialNotices={notices as any}
     />
   );

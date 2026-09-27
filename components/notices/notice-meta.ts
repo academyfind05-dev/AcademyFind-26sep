@@ -35,3 +35,7 @@ export const NOTICE_VISIBILITY_META = {
 
 export type NoticeCategoryType = NoticeCategory;
 export type NoticePriorityType = NoticePriority;
+
+export function isNoticeBoardPlanEligible(plan?: string | null): boolean {
+  return plan === "PREMIUM" || plan === "ULTRA";
+}

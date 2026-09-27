@@ -10,6 +10,7 @@ import type {
 import { requireAuth } from "@/lib/auth/requireAuth";
 import { prisma } from "@/lib/prisma";
 import { notifyUserPush } from "@/lib/pushNotifications";
+import { isNoticeBoardPlanEligible } from "@/components/notices/notice-meta";
 
 // ─── Zod Schemas ─────────────────────────────────────────────────────────────
 
@@ -34,6 +35,20 @@ const noticeSchema = z.object({
 });
 
 type NoticeInput = z.input<typeof noticeSchema>;
+
+// ─── Subscription Helpers ───────────────────────────────────────────────────
+
+export async function assertNoticeBoardSubscription(instituteId: string) {
+  const institute = await prisma.institute.findUnique({
+    where: { id: instituteId },
+    select: { id: true, name: true, slug: true, subscriptionPlan: true },
+  });
+  if (!institute) throw new Error("INSTITUTE_NOT_FOUND");
+  if (!isNoticeBoardPlanEligible(institute.subscriptionPlan)) {
+    throw new Error("SUBSCRIPTION_REQUIRED");
+  }
+  return institute;
+}
 
 async function assertManagerAccess(
   userId: string,
@@ -122,12 +137,20 @@ async function fanOutNoticeNotification(
 
 // ─── Public Actions ───────────────────────────────────────────────────────────
 
-/** Fetch notices for the public institute page (no auth required, PUBLIC only). */
+/** Fetch notices for the public institute page (no auth required, PUBLIC only, Premium/Ultra only). */
 export async function getPublicNotices(instituteId: string) {
+  const institute = await prisma.institute.findFirst({
+    where: { OR: [{ id: instituteId }, { slug: instituteId }] },
+    select: { id: true, subscriptionPlan: true },
+  });
+  if (!institute || !isNoticeBoardPlanEligible(institute.subscriptionPlan)) {
+    return [];
+  }
+
   const now = new Date();
   return prisma.instituteNotice.findMany({
     where: {
-      instituteId,
+      instituteId: institute.id,
       isActive: true,
       visibility: "PUBLIC",
       OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
@@ -148,12 +171,20 @@ export async function getPublicNotices(instituteId: string) {
   });
 }
 
-/** Fetch notices visible to a logged-in member (PUBLIC + MEMBERS_ONLY). */
+/** Fetch notices visible to a logged-in member (PUBLIC + MEMBERS_ONLY, Premium/Ultra only). */
 export async function getMemberNotices(instituteId: string) {
+  const institute = await prisma.institute.findFirst({
+    where: { OR: [{ id: instituteId }, { slug: instituteId }] },
+    select: { id: true, subscriptionPlan: true },
+  });
+  if (!institute || !isNoticeBoardPlanEligible(institute.subscriptionPlan)) {
+    return [];
+  }
+
   const now = new Date();
   return prisma.instituteNotice.findMany({
     where: {
-      instituteId,
+      instituteId: institute.id,
       isActive: true,
       visibility: { in: ["PUBLIC", "MEMBERS_ONLY"] },
       OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
@@ -212,9 +243,17 @@ export async function createNotice(
 
   const institute = await prisma.institute.findUnique({
     where: { id: instituteId },
-    select: { name: true, slug: true },
+    select: { name: true, slug: true, subscriptionPlan: true },
   });
   if (!institute) return { error: "Institute not found." };
+
+  if (!isNoticeBoardPlanEligible(institute.subscriptionPlan)) {
+    return {
+      error:
+        "Notice board is only available for institutes with a Premium or Ultra subscription. Please upgrade your plan.",
+      requiresUpgrade: true,
+    };
+  }
 
   const notice = await prisma.instituteNotice.create({
     data: {
@@ -257,6 +296,7 @@ export async function updateNotice(
 ) {
   const session = await requireAuth();
   const existing = await assertNoticeOwnership(noticeId, session.user.id, session.user.role);
+  await assertNoticeBoardSubscription(existing.instituteId);
   const data = noticeSchema.parse(input);
 
   const notice = await prisma.instituteNotice.update({
@@ -342,6 +382,7 @@ export async function restoreNotice(noticeId: string) {
 export async function pinNotice(noticeId: string, pinned: boolean) {
   const session = await requireAuth();
   const existing = await assertNoticeOwnership(noticeId, session.user.id, session.user.role);
+  await assertNoticeBoardSubscription(existing.instituteId);
 
   await prisma.instituteNotice.update({
     where: { id: noticeId },

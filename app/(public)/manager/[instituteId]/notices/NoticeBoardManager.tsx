@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useOptimistic, useCallback } from "react";
-import { Bell, Plus, FileText, AlertTriangle } from "lucide-react";
+import { useState, useCallback } from "react";
+import Link from "next/link";
+import { Bell, Plus, FileText, AlertTriangle, Crown, Lock, Sparkles } from "lucide-react";
 import { NoticeCard, NoticeCardData } from "@/components/notices/NoticeCard";
 import { NoticeFormDialog } from "@/components/notices/NoticeFormDialog";
 import { NOTICE_CATEGORY_META } from "@/components/notices/notice-meta";
@@ -10,12 +11,19 @@ import { NoticeCategory } from "@/app/generated/prisma/client";
 interface Props {
   instituteId: string;
   instituteName: string;
+  subscriptionPlan?: string | null;
   initialNotices: NoticeCardData[];
 }
 
 type FilterCategory = "ALL" | NoticeCategory;
 
-export function NoticeBoardManager({ instituteId, instituteName, initialNotices }: Props) {
+export function NoticeBoardManager({
+  instituteId,
+  instituteName,
+  subscriptionPlan,
+  initialNotices,
+}: Props) {
+  const isSubscribed = subscriptionPlan === "PREMIUM" || subscriptionPlan === "ULTRA";
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingNotice, setEditingNotice] = useState<NoticeCardData | null>(null);
   const [notices, setNotices] = useState<NoticeCardData[]>(initialNotices);
@@ -30,22 +38,23 @@ export function NoticeBoardManager({ instituteId, instituteName, initialNotices 
   const unpinned = filtered.filter((n) => !n.isPinned);
 
   const handleEdit = useCallback((notice: NoticeCardData) => {
+    if (!isSubscribed) return;
     setEditingNotice(notice);
     setDialogOpen(true);
-  }, []);
+  }, [isSubscribed]);
 
   const handleDeleted = useCallback((id: string) => {
     setNotices((prev) => prev.filter((n) => n.id !== id));
   }, []);
 
   const handleNewClick = () => {
+    if (!isSubscribed) return;
     setEditingNotice(null);
     setDialogOpen(true);
   };
 
   // After save, reload from server via full page re-render (revalidatePath handles it)
   const handleSaved = () => {
-    // Close dialog — Next.js revalidatePath in the action will refresh the page
     setDialogOpen(false);
     setEditingNotice(null);
   };
@@ -60,6 +69,42 @@ export function NoticeBoardManager({ instituteId, instituteName, initialNotices 
 
   return (
     <div className="space-y-7">
+      {/* ─── Subscription Lock Banner (for Basic / Verified) ───────── */}
+      {!isSubscribed && (
+        <div className="relative overflow-hidden rounded-2xl border border-amber-300/80 bg-gradient-to-br from-amber-500/10 via-amber-100/40 to-orange-500/10 p-6 shadow-sm">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-white shadow-md shadow-amber-500/30 flex-shrink-0">
+                <Crown className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-black tracking-wide uppercase px-2 py-0.5 rounded-full bg-amber-500 text-white">
+                    Premium & Ultra Exclusive
+                  </span>
+                  <span className="text-xs text-stone-500 font-medium">
+                    Current Plan: <span className="font-bold text-stone-800">{subscriptionPlan || "BASIC"}</span>
+                  </span>
+                </div>
+                <h3 className="text-base font-extrabold text-stone-900">
+                  Notice Board is locked on your current plan
+                </h3>
+                <p className="text-xs text-stone-600 mt-1 max-w-xl leading-relaxed">
+                  Upgrade to <strong>Premium</strong> or <strong>Ultra</strong> to post official announcements, broadcast live updates to students on mobile, and trigger instant push notifications.
+                </p>
+              </div>
+            </div>
+            <Link
+              href={`/manager/${instituteId}/subscription`}
+              className="flex-shrink-0 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-amber-500 via-amber-600 to-orange-600 text-white font-bold text-xs px-5 py-2.5 shadow-md shadow-amber-500/25 hover:shadow-lg hover:shadow-amber-500/40 transition-all hover:-translate-y-0.5"
+            >
+              <Sparkles className="w-4 h-4" />
+              Upgrade to Premium / Ultra
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* ─── Page Header ──────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -79,13 +124,23 @@ export function NoticeBoardManager({ instituteId, instituteName, initialNotices 
             Active members are notified automatically.
           </p>
         </div>
-        <button
-          onClick={handleNewClick}
-          className="flex-shrink-0 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold text-sm px-5 h-10 shadow-md shadow-amber-500/20 hover:shadow-lg hover:shadow-amber-500/30 transition-all hover:-translate-y-0.5"
-        >
-          <Plus className="w-4 h-4" />
-          Post Notice
-        </button>
+        {isSubscribed ? (
+          <button
+            onClick={handleNewClick}
+            className="flex-shrink-0 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold text-sm px-5 h-10 shadow-md shadow-amber-500/20 hover:shadow-lg hover:shadow-amber-500/30 transition-all hover:-translate-y-0.5"
+          >
+            <Plus className="w-4 h-4" />
+            Post Notice
+          </button>
+        ) : (
+          <Link
+            href={`/manager/${instituteId}/subscription`}
+            className="flex-shrink-0 inline-flex items-center gap-2 rounded-full bg-stone-100 hover:bg-amber-50 border border-stone-300/80 hover:border-amber-300 text-stone-700 hover:text-amber-800 font-bold text-sm px-5 h-10 shadow-2xs transition-all"
+          >
+            <Lock className="w-4 h-4 text-amber-600" />
+            Unlock with Premium
+          </Link>
+        )}
       </div>
 
       {/* ─── Stats Row ────────────────────────────────────────────── */}

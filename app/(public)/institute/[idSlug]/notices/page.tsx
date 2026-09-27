@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Metadata } from "next";
 import extractId from "@/lib/extractId";
 import { prisma } from "@/lib/prisma";
@@ -41,9 +41,14 @@ export default async function InstituteNoticesPage({ params, searchParams }: Pro
 
   const institute = await prisma.institute.findUnique({
     where: { id },
-    select: { id: true, name: true, slug: true, logo: true, imageUrl: true },
+    select: { id: true, name: true, slug: true, logo: true, imageUrl: true, subscriptionPlan: true },
   });
   if (!institute) notFound();
+
+  const isEligible = institute.subscriptionPlan === "PREMIUM" || institute.subscriptionPlan === "ULTRA";
+  if (!isEligible) {
+    redirect(`/institute/${institute.slug}`);
+  }
 
   const whereClause: any = {
     instituteId: id,
