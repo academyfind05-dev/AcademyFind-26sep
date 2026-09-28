@@ -11,7 +11,7 @@ interface NoticeFormDialogProps {
   open: boolean;
   editingNotice?: NoticeCardData | null;
   onClose: () => void;
-  onSaved?: () => void;
+  onSaved?: (notice?: NoticeCardData, isNew?: boolean) => void;
 }
 
 const CATEGORIES = Object.entries(NOTICE_CATEGORY_META) as [string, typeof NOTICE_CATEGORY_META[keyof typeof NOTICE_CATEGORY_META]][];
@@ -90,7 +90,8 @@ export function NoticeFormDialog({
       if ("error" in res && res.error) {
         setError(res.error as string);
       } else {
-        onSaved?.();
+        const saved = ("notice" in res && res.notice) ? (res.notice as any) : undefined;
+        onSaved?.(saved, !editingNotice);
         onClose();
       }
     });

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Bell, Plus, FileText, AlertTriangle, Crown, Lock, Sparkles } from "lucide-react";
 import { NoticeCard, NoticeCardData } from "@/components/notices/NoticeCard";
 import { NoticeFormDialog } from "@/components/notices/NoticeFormDialog";
@@ -23,11 +24,17 @@ export function NoticeBoardManager({
   subscriptionPlan,
   initialNotices,
 }: Props) {
+  const router = useRouter();
   const isSubscribed = subscriptionPlan === "PREMIUM" || subscriptionPlan === "ULTRA";
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingNotice, setEditingNotice] = useState<NoticeCardData | null>(null);
   const [notices, setNotices] = useState<NoticeCardData[]>(initialNotices);
   const [filter, setFilter] = useState<FilterCategory>("ALL");
+
+  // Keep state in sync with server-rendered props on revalidation
+  useEffect(() => {
+    setNotices(initialNotices);
+  }, [initialNotices]);
 
   const filtered =
     filter === "ALL"
@@ -45,7 +52,15 @@ export function NoticeBoardManager({
 
   const handleDeleted = useCallback((id: string) => {
     setNotices((prev) => prev.filter((n) => n.id !== id));
-  }, []);
+    router.refresh();
+  }, [router]);
+
+  const handlePinToggle = useCallback((id: string, isPinned: boolean) => {
+    setNotices((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, isPinned } : n))
+    );
+    router.refresh();
+  }, [router]);
 
   const handleNewClick = () => {
     if (!isSubscribed) return;
@@ -53,11 +68,21 @@ export function NoticeBoardManager({
     setDialogOpen(true);
   };
 
-  // After save, reload from server via full page re-render (revalidatePath handles it)
-  const handleSaved = () => {
+  // Instant optimistic update when a notice is created or edited
+  const handleSaved = useCallback((savedNotice?: NoticeCardData, isNew?: boolean) => {
+    if (savedNotice) {
+      setNotices((prev) => {
+        if (isNew) {
+          return [savedNotice, ...prev.filter((n) => n.id !== savedNotice.id)];
+        } else {
+          return prev.map((n) => (n.id === savedNotice.id ? savedNotice : n));
+        }
+      });
+    }
     setDialogOpen(false);
     setEditingNotice(null);
-  };
+    router.refresh();
+  }, [router]);
 
   const filterCategories: { key: FilterCategory; label: string }[] = [
     { key: "ALL", label: "All" },
@@ -242,6 +267,7 @@ export function NoticeBoardManager({
                 isManager
                 onEdit={handleEdit}
                 onDeleted={handleDeleted}
+                onPinToggle={handlePinToggle}
               />
             ))}
           </div>
@@ -266,6 +292,7 @@ export function NoticeBoardManager({
                 isManager
                 onEdit={handleEdit}
                 onDeleted={handleDeleted}
+                onPinToggle={handlePinToggle}
               />
             ))}
           </div>

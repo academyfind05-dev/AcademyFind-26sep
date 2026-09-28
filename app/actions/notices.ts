@@ -268,6 +268,21 @@ export async function createNotice(
       expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
       attachmentUrl: data.attachmentUrl ?? null,
     },
+    select: {
+      id: true,
+      instituteId: true,
+      title: true,
+      body: true,
+      category: true,
+      priority: true,
+      visibility: true,
+      isPinned: true,
+      expiresAt: true,
+      attachmentUrl: true,
+      createdAt: true,
+      updatedAt: true,
+      author: { select: { name: true, image: true } },
+    },
   });
 
   // Fan out — skip MEMBERS_ONLY members for STAFF_ONLY, skip all for PUBLIC
@@ -286,7 +301,7 @@ export async function createNotice(
   revalidatePath(`/institute/${institute.slug}`);
   revalidatePath(`/institute/${institute.slug}/notices`);
 
-  return { success: true, noticeId: notice.id };
+  return { success: true, noticeId: notice.id, notice };
 }
 
 /** Update an existing notice. Re-notifies members only if priority is CRITICAL. */
@@ -311,7 +326,21 @@ export async function updateNotice(
       expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
       attachmentUrl: data.attachmentUrl ?? null,
     },
-    select: { id: true, instituteId: true },
+    select: {
+      id: true,
+      instituteId: true,
+      title: true,
+      body: true,
+      category: true,
+      priority: true,
+      visibility: true,
+      isPinned: true,
+      expiresAt: true,
+      attachmentUrl: true,
+      createdAt: true,
+      updatedAt: true,
+      author: { select: { name: true, image: true } },
+    },
   });
 
   const institute = await prisma.institute.findUnique({
@@ -338,7 +367,7 @@ export async function updateNotice(
     revalidatePath(`/institute/${institute.slug}/notices`);
   }
 
-  return { success: true };
+  return { success: true, notice };
 }
 
 /** Soft-delete a notice (sets isActive = false). */

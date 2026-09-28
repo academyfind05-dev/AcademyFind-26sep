@@ -26,9 +26,10 @@ interface NoticeCardProps {
   isManager?: boolean;
   onEdit?: (notice: NoticeCardData) => void;
   onDeleted?: (noticeId: string) => void;
+  onPinToggle?: (noticeId: string, isPinned: boolean) => void;
 }
 
-export function NoticeCard({ notice, isManager, onEdit, onDeleted }: NoticeCardProps) {
+export function NoticeCard({ notice, isManager, onEdit, onDeleted, onPinToggle }: NoticeCardProps) {
   const [isPending, startTransition] = useTransition();
   const [deleted, setDeleted] = useState(false);
   const [pinning, setPinning] = useState(false);
@@ -52,8 +53,10 @@ export function NoticeCard({ notice, isManager, onEdit, onDeleted }: NoticeCardP
 
   function handlePin() {
     setPinning(true);
+    const nextPinned = !notice.isPinned;
+    onPinToggle?.(notice.id, nextPinned);
     startTransition(async () => {
-      await pinNotice(notice.id, !notice.isPinned);
+      await pinNotice(notice.id, nextPinned);
       setPinning(false);
     });
   }
