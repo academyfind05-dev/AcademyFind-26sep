@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/getSession";
 import { prisma } from "@/lib/prisma";
 
-type Params = { params: Promise<{ id: string; messageId: string }> };
+type Context = { params: Promise<{ id: string; messageId: string }> };
 
 async function ensureAccess(conversationId: string, userId: string, userRole?: string | null) {
   const participant = await prisma.conversationParticipant.findFirst({
@@ -30,7 +30,7 @@ async function ensureAccess(conversationId: string, userId: string, userRole?: s
   return false;
 }
 
-export async function POST(req: Request, { params }: Params) {
+export async function POST(req: NextRequest, { params }: Context) {
   const session = await getSession();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
