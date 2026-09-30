@@ -9,6 +9,7 @@ import {
     Headphones,
     Send,
     MapPin,
+    Compass,
 } from "lucide-react";
 import { Metadata } from "next";
 import { headers } from "next/headers";
@@ -95,6 +96,11 @@ export default async function SalesManagerLayout({
                             href={`/sales_manager/${id}/enquiries`}
                             icon={<Headphones />}
                             label="Assigned Leads"
+                        />
+                        <SidebarLink
+                            href={`/sales_manager/${id}/life-coach`}
+                            icon={<Compass />}
+                            label="Life Coach Requests"
                         />
                         <SidebarLink
                             href={`/sales_manager/${id}/assignments`}

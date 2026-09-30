@@ -46,6 +46,7 @@ model User {
   salesCategoryAssignments SalesCategoryAssignment[] @relation("SalesCategoryAssignments")
   salesAreaAssignments     SalesAreaAssignment[]     @relation("SalesAreaAssignments")
   salesEnquiryAssignments  InstituteEnquiry[]        @relation("SalesEnquiryAssignments")
+  salesLifeCoachAssignments LifeCoachRequest[]       @relation("SalesLifeCoachAssignments")
   salesRequests            SalesAssignmentRequest[]  @relation("SalesAssignmentRequests")
   reviewedSalesRequests    SalesAssignmentRequest[]  @relation("ReviewedSalesRequests")
   ismAssignments           InstituteSalesManagerAssignment[] @relation("IsmAssignments")
@@ -1371,14 +1372,23 @@ model SalesAssignmentRequest {
 }
 
 model LifeCoachRequest {
-  id        String                 @id @default(cuid())
-  fullName  String
-  phone     String
-  email     String?
-  message   String?
-  notes     String?
-  status    LifeCoachRequestStatus @default(PENDING)
-  createdAt DateTime               @default(now())
+  id                     String                 @id @default(cuid())
+  fullName               String
+  phone                  String
+  email                  String?
+  message                String?
+  notes                  String?
+  status                 LifeCoachRequestStatus @default(PENDING)
+  assignedSalesManagerId String?
+  assignedSalesManager   User?                  @relation("SalesLifeCoachAssignments", fields: [assignedSalesManagerId], references: [id], onDelete: SetNull)
+  salesManagerNote       String?                @db.Text
+  lastUpdatedByRole      String?
+  lastUpdatedByName      String?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @default(now()) @updatedAt
+
+  @@index([assignedSalesManagerId])
+  @@index([status])
 }
 
 model AdminNotification {

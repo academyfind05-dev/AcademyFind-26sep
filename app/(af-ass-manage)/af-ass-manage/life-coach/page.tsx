@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { Eye, Phone, Mail, Clock, ShieldAlert, Filter, MessageCircle } from "lucide-react";
+import { Eye, Phone, Mail, Clock, ShieldAlert, Filter, MessageCircle, UserCheck } from "lucide-react";
 import { LifeCoachRequestStatus } from "@/app/generated/prisma/enums";
 import AdminDeleteButton from "@/components/admin/AdminDeleteButton";
 import { deleteLifeCoachRequestAction } from "./actions";
@@ -14,6 +14,7 @@ export default async function AdminLifeCoachLeadsPage({
 }) {
   const params = await searchParams;
   const currentFilter = params.status || 'ALL';
+  const salesManagerFilter = params.salesManagerId || 'ALL';
 
   // Build filter condition
   const whereCondition: any = {};
@@ -22,11 +23,32 @@ export default async function AdminLifeCoachLeadsPage({
     whereCondition.status = currentFilter as LifeCoachRequestStatus;
   }
 
-  // Fetch requests based on filter
-  const requests = await prisma.lifeCoachRequest.findMany({
-    where: whereCondition,
-    orderBy: { createdAt: "desc" },
-  });
+  if (salesManagerFilter === 'UNASSIGNED') {
+    whereCondition.assignedSalesManagerId = null;
+  } else if (salesManagerFilter !== 'ALL') {
+    whereCondition.assignedSalesManagerId = salesManagerFilter;
+  }
+
+  // Fetch requests and sales managers in parallel
+  const [requests, salesManagers, totalUnassignedCount] = await Promise.all([
+    prisma.lifeCoachRequest.findMany({
+      where: whereCondition,
+      include: {
+        assignedSalesManager: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.user.findMany({
+      where: { role: "SALES_MANAGER", isActive: true },
+      select: { id: true, name: true, email: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.lifeCoachRequest.count({
+      where: { assignedSalesManagerId: null },
+    }),
+  ]);
 
   // Filter options array based on LifeCoachRequestStatus enum
   const filterOptions = [
@@ -49,32 +71,86 @@ export default async function AdminLifeCoachLeadsPage({
           </div>
           <div>
             <h1 className="text-3xl font-black text-slate-900 tracking-tight">Life Coach Requests</h1>
-            <p className="text-sm text-slate-500">Manage and follow up with students who need mentorship. (Showing: {currentFilter})</p>
+            <p className="text-sm text-slate-500">
+              Manage, assign to Sales Managers, and track student mentorship requests. (Showing: {currentFilter})
+            </p>
           </div>
         </div>
-        <div className="bg-purple-100 text-purple-800 px-4 py-2 rounded-xl font-bold text-sm shrink-0">
-          Total Requests: {requests.length}
+        <div className="flex items-center gap-2">
+          {totalUnassignedCount > 0 && (
+            <span className="bg-amber-100 text-amber-800 px-3 py-1.5 rounded-xl font-bold text-xs">
+              {totalUnassignedCount} Unassigned
+            </span>
+          )}
+          <div className="bg-purple-100 text-purple-800 px-4 py-2 rounded-xl font-bold text-sm shrink-0">
+            Total Requests: {requests.length}
+          </div>
         </div>
       </div>
 
-      {/* 🚀 Filter Bar */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
-        <div className="text-sm font-bold text-slate-400 flex items-center gap-1.5 mr-2">
-          <Filter className="w-4 h-4" /> Filter:
+      {/* 🚀 Filter Bars */}
+      <div className="flex flex-col gap-3">
+        {/* Status Filters */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          <div className="text-sm font-bold text-slate-400 flex items-center gap-1.5 mr-2 shrink-0">
+            <Filter className="w-4 h-4" /> Status:
+          </div>
+          {filterOptions.map((opt) => (
+            <Link
+              key={opt.value}
+              prefetch={false}
+              href={`/af-ass-manage/life-coach?status=${opt.value}${salesManagerFilter !== 'ALL' ? `&salesManagerId=${salesManagerFilter}` : ''}`}
+              className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap ${currentFilter === opt.value
+                ? "bg-stone-900 text-white shadow-md shadow-stone-900/20 scale-105"
+                : "bg-white border border-stone-100 text-slate-500 hover:bg-stone-50 hover:text-stone-700 hover:border-stone-200"
+                }`}
+            >
+              {opt.label}
+            </Link>
+          ))}
         </div>
-        {filterOptions.map((opt: any) => (
-          <Link
-            key={opt.value}
-            prefetch={false}
-            href={`/af-ass-manage/life-coach?status=${opt.value}`}
-            className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap ${currentFilter === opt.value
-              ? "bg-stone-900 text-white shadow-md shadow-stone-900/20 scale-105"
-              : "bg-white border border-stone-100 text-slate-500 hover:bg-stone-50 hover:text-stone-700 hover:border-stone-200"
+
+        {/* Sales Manager Filter */}
+        {salesManagers.length > 0 && (
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            <div className="text-sm font-bold text-indigo-400 flex items-center gap-1.5 mr-2 shrink-0">
+              <UserCheck className="w-4 h-4 text-indigo-600" /> Sales Manager:
+            </div>
+            <Link
+              prefetch={false}
+              href={`/af-ass-manage/life-coach?status=${currentFilter}&salesManagerId=ALL`}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${salesManagerFilter === 'ALL'
+                ? "bg-indigo-600 text-white shadow-xs"
+                : "bg-white border border-indigo-100 text-indigo-700 hover:bg-indigo-50"
               }`}
-          >
-            {opt.label}
-          </Link>
-        ))}
+            >
+              All
+            </Link>
+            <Link
+              prefetch={false}
+              href={`/af-ass-manage/life-coach?status=${currentFilter}&salesManagerId=UNASSIGNED`}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${salesManagerFilter === 'UNASSIGNED'
+                ? "bg-indigo-600 text-white shadow-xs"
+                : "bg-white border border-indigo-100 text-indigo-700 hover:bg-indigo-50"
+              }`}
+            >
+              Unassigned
+            </Link>
+            {salesManagers.map((sm) => (
+              <Link
+                key={sm.id}
+                prefetch={false}
+                href={`/af-ass-manage/life-coach?status=${currentFilter}&salesManagerId=${sm.id}`}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${salesManagerFilter === sm.id
+                  ? "bg-indigo-600 text-white shadow-xs"
+                  : "bg-white border border-indigo-100 text-indigo-700 hover:bg-indigo-50"
+                }`}
+              >
+                {sm.name || sm.email}
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="bg-white/80 backdrop-blur-xl border border-stone-100/60 rounded-[2rem] shadow-sm overflow-hidden mt-4">
@@ -84,6 +160,7 @@ export default async function AdminLifeCoachLeadsPage({
               <tr className="bg-stone-50/50 border-b border-stone-100/50 text-xs uppercase tracking-wider text-slate-500 font-bold">
                 <th className="p-4">Student Name</th>
                 <th className="p-4">Contact Info</th>
+                <th className="p-4">Assigned Sales Mgr</th>
                 <th className="p-4">Message / Query</th>
                 <th className="p-4">Date</th>
                 <th className="p-4">Status</th>
@@ -93,17 +170,29 @@ export default async function AdminLifeCoachLeadsPage({
             <tbody className="divide-y divide-stone-100/50">
               {requests.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-slate-400 italic">No counseling requests found for "{currentFilter}".</td>
+                  <td colSpan={7} className="p-8 text-center text-slate-400 italic">No counseling requests found for "{currentFilter}".</td>
                 </tr>
               ) : (
-                requests.map((req: any) => (
+                requests.map((req) => (
                   <tr key={req.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="p-4 font-semibold text-slate-800">{req.fullName}</td>
                     <td className="p-4 text-sm text-slate-600 space-y-1">
                       <div className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-slate-400" /> {req.phone}</div>
                       {req.email && <div className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-slate-400" /> {req.email}</div>}
                     </td>
-                    <td className="p-4 max-w-[280px]">
+                    <td className="p-4 text-xs">
+                      {req.assignedSalesManager ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          <UserCheck className="w-3.5 h-3.5 text-indigo-500" />
+                          {req.assignedSalesManager.name || req.assignedSalesManager.email}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 italic">
+                          Unassigned
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-4 max-w-[240px]">
                       {req.message ? (
                         <p className="text-xs text-slate-700 font-medium line-clamp-2" title={req.message}>
                           {req.message}
@@ -149,7 +238,7 @@ export default async function AdminLifeCoachLeadsPage({
                           </a>
                         )}
                         <Link prefetch={false} href={`/af-ass-manage/life-coach/${req.id}`}>
-                          <button className="inline-flex items-center justify-center p-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-purple-100 hover:text-purple-700 transition-colors cursor-pointer" title="View Request Details">
+                          <button className="inline-flex items-center justify-center p-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-purple-100 hover:text-purple-700 transition-colors cursor-pointer" title="View & Assign Request">
                             <Eye className="w-4 h-4" />
                           </button>
                         </Link>

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { notFound, redirect } from "next/navigation";
-import { User, Phone, Mail, Clock, MessageSquare, ArrowLeft, MessageCircle, ExternalLink } from "lucide-react";
+import { notFound } from "next/navigation";
+import { User, Phone, Mail, Clock, MessageSquare, ArrowLeft, MessageCircle, UserCheck, FileText } from "lucide-react";
 import Link from "next/link";
 import StatusUpdater from "@/components/admin/AdminLifeCoachStatusUpdater";
 import { formatIST, formatWhatsAppNumber } from "@/lib/utils";
@@ -11,9 +11,21 @@ import { Separator } from "@/components/ui/separator";
 export default async function LifeCoachDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const request = await prisma.lifeCoachRequest.findUnique({
-    where: { id },
-  });
+  const [request, salesManagers] = await Promise.all([
+    prisma.lifeCoachRequest.findUnique({
+      where: { id },
+      include: {
+        assignedSalesManager: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    }),
+    prisma.user.findMany({
+      where: { role: "SALES_MANAGER", isActive: true },
+      select: { id: true, name: true, email: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
 
   if (!request) notFound();
 
@@ -24,17 +36,35 @@ export default async function LifeCoachDetailPage({ params }: { params: Promise<
       </Link>
 
       <Card className="border-stone-200 shadow-sm overflow-hidden bg-white">
-
-        {/* Header & Status Updater */}
-        <CardHeader className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-stone-50/50 pb-6">
-          <div>
-            <CardTitle className="text-2xl font-bold text-stone-900">Counseling Request</CardTitle>
-            <p className="text-sm text-stone-500 font-mono mt-2 bg-white px-2 py-1 rounded border border-stone-200 w-fit">ID: {request.id}</p>
+        {/* Header & Status + Sales Manager Updater */}
+        <CardHeader className="flex flex-col gap-6 bg-stone-50/60 pb-6 border-b border-stone-100">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <div className="flex items-center gap-3">
+                <CardTitle className="text-2xl font-bold text-stone-900">Counseling Request</CardTitle>
+                {request.assignedSalesManager && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                    <UserCheck className="w-3.5 h-3.5 text-indigo-600" />
+                    Assigned: {request.assignedSalesManager.name || request.assignedSalesManager.email}
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-stone-500 font-mono mt-2 bg-white px-2 py-1 rounded border border-stone-200 w-fit">ID: {request.id}</p>
+            </div>
           </div>
 
-          <StatusUpdater requestId={request.id} currentStatus={request.status as any} currentNotes={request.notes} />
+          <StatusUpdater
+            requestId={request.id}
+            currentStatus={request.status as any}
+            currentNotes={request.notes}
+            salesManagerNote={request.salesManagerNote}
+            assignedSalesManagerId={request.assignedSalesManagerId}
+            salesManagers={salesManagers}
+            lastUpdatedByName={request.lastUpdatedByName}
+            lastUpdatedByRole={request.lastUpdatedByRole}
+            isSalesManager={false}
+          />
         </CardHeader>
-        <Separator className="bg-stone-100" />
 
         <CardContent className="p-6 md:p-8">
           {/* Lead Details Grid */}
@@ -63,7 +93,7 @@ export default async function LifeCoachDetailPage({ params }: { params: Promise<
                   <div className="p-2 bg-white rounded-lg shadow-sm"><Mail className="w-4 h-4 text-stone-600" /></div>
                   <div>
                     <p className="text-[10px] font-bold text-stone-400 uppercase">Email Address</p>
-                    <a href={`mailto:${request.email}`} className="font-semibold text-blue-700 hover:underline">{request.email}</a>
+                    <a href={`mailto:${request.email}`} className="font-semibold text-blue-700 hover:underline">{request.email || "Not provided"}</a>
                   </div>
                 </div>
 
@@ -107,12 +137,28 @@ export default async function LifeCoachDetailPage({ params }: { params: Promise<
                     <span className="italic text-stone-400">No specific message provided. Please call to ask.</span>
                   )}
                 </p>
+
+                {request.salesManagerNote && (
+                  <div className="mt-4 pt-4 border-t border-slate-100 bg-amber-50/50 rounded-xl p-3">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900 mb-1">
+                      <FileText className="w-3.5 h-3.5 text-amber-600" /> Sales Manager Note:
+                    </div>
+                    <p className="text-xs text-amber-950 whitespace-pre-wrap">{request.salesManagerNote}</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
-          <div className="mt-8 pt-6 border-t border-stone-100 text-xs text-stone-400 flex items-center gap-2">
-            <Clock className="w-4 h-4" /> Requested on {formatIST(request.createdAt)}
+          <div className="mt-8 pt-6 border-t border-stone-100 text-xs text-stone-400 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4" /> Requested on {formatIST(request.createdAt)}
+            </div>
+            {request.updatedAt && (
+              <span className="text-[11px] text-slate-400">
+                Last modified: {formatIST(request.updatedAt)}
+              </span>
+            )}
           </div>
         </CardContent>
       </Card>
