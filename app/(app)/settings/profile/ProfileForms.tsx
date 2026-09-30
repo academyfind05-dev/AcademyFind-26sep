@@ -74,7 +74,11 @@ export function ProfileForms({ user, student, teacher }: Props) {
       if (data?.success) {
         setPhoneVerified(true);
         setCurrentPhone(phone);
-        toast.success("Phone number verified successfully! ✓");
+        toast.dismiss("af-phone-otp-status");
+        toast.success("Phone number verified successfully! ✓", {
+          id: "af-phone-verified-profile",
+          duration: 3500,
+        });
         setIsVerifyModalOpen(false);
         return true;
       } else {

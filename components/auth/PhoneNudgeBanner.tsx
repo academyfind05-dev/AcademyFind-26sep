@@ -229,10 +229,11 @@ export default function PhoneNudgeBanner() {
         setPhoneVerified(true);
         setUserPhone(verifiedPhone);
         setNudgeType(null);
-        setIsOtpModalOpen(false);
+        toast.dismiss("af-phone-otp-status");
         toast.dismiss("af-phone-verification-nudge");
         toast.success("Phone number verified successfully! 🎉", {
-          duration: 5000,
+          id: "af-phone-verified-success",
+          duration: 3500,
           style: {
             background: "#ecfdf5",
             border: "1px solid #a7f3d0",

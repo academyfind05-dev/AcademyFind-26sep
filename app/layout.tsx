@@ -12,7 +12,7 @@ import { AuthPromptModal } from "@/components/layout/auth-prompt-model";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
 import NextTopLoader from 'nextjs-toploader'
-import { Toaster } from 'react-hot-toast'
+import AppToaster from "@/components/ui/AppToaster";
 import { GoogleOneTap } from "@/components/layout/GoogleOneTap";
 import GlobalCallbackFAB from "@/components/User/GlobalCallBack";
 import UserActivityTracker from "@/components/User/UserActivityTracker";
@@ -140,7 +140,7 @@ export default async function RootLayout({
 
         <UserActivityTracker />
         <VisitorTracker />
-        <Toaster position="top-center" reverseOrder={false} />
+        <AppToaster />
         <GoogleOneTap />
         <MobileAppProvider />
         {/* <AuthPromptModal isAuthenticated={Boolean(session?.user)} />

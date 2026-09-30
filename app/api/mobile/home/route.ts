@@ -64,13 +64,39 @@ export async function GET() {
       take: 6
     });
 
-    // Fetch Popular Comparisons
+    // Fetch Popular Comparisons with full rich institute metadata
     const popularComparisons = await prisma.instituteComparisonCache.findMany({
+      where: {
+        AND: [
+          { institute1: { name: { notIn: ['Educational institution', 'Test'] } } },
+          { institute2: { name: { notIn: ['Educational institution', 'Test'] } } },
+        ]
+      },
       orderBy: { viewCount: 'desc' },
-      take: 5,
+      take: 6,
       include: {
-        institute1: { select: { name: true, logo: true, slug: true, city: { select: { name: true } } } },
-        institute2: { select: { name: true, logo: true, slug: true } },
+        institute1: {
+          select: {
+            name: true,
+            logo: true,
+            slug: true,
+            googleRating: true,
+            googleReviewCount: true,
+            feeInfo: true,
+            city: { select: { name: true } },
+          },
+        },
+        institute2: {
+          select: {
+            name: true,
+            logo: true,
+            slug: true,
+            googleRating: true,
+            googleReviewCount: true,
+            feeInfo: true,
+            city: { select: { name: true } },
+          },
+        },
       },
     });
 

@@ -157,7 +157,10 @@ function PhoneOtpModalContent({
       setConfirmation(result);
       setStep("otp");
       startResendTimer();
-      toast.success(`OTP sent to +91-${cleanedPhone}`);
+      toast.success(`OTP sent to +91-${cleanedPhone}`, {
+        id: "af-phone-otp-status",
+        duration: 3500,
+      });
     } catch (err: unknown) {
       const fbErr = err as { code?: string; message?: string; customData?: Record<string, unknown> };
       console.error("[PhoneOtpModal] sendOtp error:", fbErr.code, fbErr.message, fbErr.customData);
@@ -184,6 +187,7 @@ function PhoneOtpModalContent({
       const result = await confirmation.confirm(otp);
       const idToken = await result.user.getIdToken();
       const verifiedPhone = phone.replace(/\D/g, "").slice(0, 10);
+      toast.dismiss("af-phone-otp-status");
       const success = await onVerified(idToken, verifiedPhone);
       if (success !== false) {
         setStep("success");
@@ -238,12 +242,17 @@ function PhoneOtpModalContent({
     }
   };
 
+  const handleModalClose = useCallback(() => {
+    toast.dismiss("af-phone-otp-status");
+    onClose();
+  }, [onClose]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
-        onClick={onClose}
+        onClick={handleModalClose}
       />
 
       {/* Invisible reCAPTCHA container */}
@@ -283,7 +292,7 @@ function PhoneOtpModalContent({
 
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleModalClose}
               className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
             >
               <X className="h-5 w-5" />
@@ -437,7 +446,7 @@ function PhoneOtpModalContent({
                 </div>
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={handleModalClose}
                   className="mt-2 h-10 w-full rounded-xl bg-emerald-500 font-semibold text-white transition-all hover:bg-emerald-600"
                 >
                   Done
