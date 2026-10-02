@@ -181,6 +181,26 @@ export default function LoginComponent({ stats }: { stats?: PlatformStats }) {
     }
   }, [router, redirectTarget]);
 
+  // Check that the phone number is registered before requesting an OTP from Firebase
+  const handleBeforeSendOtp = useCallback(async (phoneNumber: string) => {
+    try {
+      const res = await fetch("/api/auth/check-phone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phoneNumber, mode: "login" }),
+      });
+      const data = await res.json();
+      if (!data.allowed) {
+        toast.error(data.error || "No account found with this mobile number. Please register first.");
+        return false;
+      }
+      return true;
+    } catch {
+      toast.error("Failed to verify mobile number. Please try again.");
+      return false;
+    }
+  }, []);
+
   return (
     <main className="min-h-screen bg-[#f8f8f8] p-4 lg:p-8">
       <div className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-7xl overflow-hidden rounded-[32px] bg-white shadow-2xl">
@@ -437,6 +457,7 @@ export default function LoginComponent({ stats }: { stats?: PlatformStats }) {
       <PhoneOtpModal
         isOpen={isPhoneModalOpen}
         onClose={() => setIsPhoneModalOpen(false)}
+        onBeforeSendOtp={handleBeforeSendOtp}
         onVerified={handlePhoneLoginVerified}
         title="Login with Phone OTP"
         subtitle="Enter your registered phone number. We'll send an OTP to verify your identity."

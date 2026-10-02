@@ -18,6 +18,8 @@ interface PhoneOtpModalProps {
   onClose: () => void;
   /** Called after OTP is verified and server has confirmed. Receives the Firebase idToken. */
   onVerified: (idToken: string, phone: string) => Promise<boolean | void>;
+  /** Optional: hook called before sending OTP. Return false or error message string to cancel send. */
+  onBeforeSendOtp?: (phone: string) => Promise<boolean | string | void>;
   /** Optional: pre-fill phone number (e.g. from profile) */
   defaultPhone?: string;
   /** Title shown at top of modal */
@@ -35,6 +37,7 @@ const RESEND_COOLDOWN_SECONDS = 60;
 function PhoneOtpModalContent({
   onClose,
   onVerified,
+  onBeforeSendOtp,
   defaultPhone = "",
   title = "Verify Your Phone",
   subtitle = "We'll send a 6-digit OTP to your mobile number.",
@@ -146,6 +149,19 @@ function PhoneOtpModalContent({
 
     setIsLoading(true);
     try {
+      if (onBeforeSendOtp) {
+        const checkResult = await onBeforeSendOtp(cleanedPhone);
+        if (checkResult === false) {
+          setIsLoading(false);
+          return;
+        }
+        if (typeof checkResult === "string") {
+          toast.error(checkResult);
+          setIsLoading(false);
+          return;
+        }
+      }
+
       const verifier = initRecaptcha();
       if (!verifier) {
         toast.error("Verification setup failed. Please refresh and try again.");
@@ -178,7 +194,7 @@ function PhoneOtpModalContent({
     } finally {
       setIsLoading(false);
     }
-  }, [phone, initRecaptcha, startResendTimer]);
+  }, [phone, initRecaptcha, startResendTimer, onBeforeSendOtp]);
 
   const handleVerifyOtp = useCallback(async () => {
     if (otp.length !== 6 || !confirmation) return;

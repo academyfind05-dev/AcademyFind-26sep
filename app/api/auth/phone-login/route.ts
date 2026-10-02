@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { firebaseAuth, getFirebaseAuth } from "@/lib/firebase-admin";
+import { auth as betterAuth } from "@/lib/auth/auth";
+import { makeSignature } from "better-auth/crypto";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { validateIndianPhoneNumber } from "@/lib/phone-validation";
@@ -129,43 +131,37 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Create session directly via Prisma (compatible with Better Auth session structure)
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30); // 30 days
-    const tokenRaw = crypto.randomUUID() + crypto.randomUUID();
-    const encoder = new TextEncoder();
-    const data = encoder.encode(tokenRaw);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const token = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+    // Create session via Better Auth internal adapter and sign cookie with Better Auth secret
+    const ctx = await (betterAuth as any).$context;
+    const session = await ctx.internalAdapter.createSession(user.id);
+    const signature = await makeSignature(session.token, ctx.secret);
+    const signedCookieValue = `${session.token}.${signature}`;
 
-    await prisma.session.create({
-      data: {
-        id: crypto.randomUUID(),
-        userId: user.id,
-        token,
-        expiresAt,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        ipAddress: req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? "unknown",
-        userAgent: req.headers.get("user-agent") ?? "unknown",
-      },
-    });
+    const cookieName = ctx.authCookies.sessionToken.name;
+    const cookieAttrs = ctx.authCookies.sessionToken.attributes;
 
     // Set the session cookie
     const response = NextResponse.json({
       success: true,
       user: { id: user.id, email: user.email, name: user.name },
       isNewUser,
+      token: session.token,
     });
 
-    // Set the better-auth session cookie
-    response.cookies.set("better-auth.session_token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      expires: expiresAt,
-      path: "/",
+    // Set the primary Better Auth signed cookie
+    response.cookies.set(cookieName, signedCookieValue, {
+      ...cookieAttrs,
+      expires: session.expiresAt,
     });
+
+    // If secure prefix was added, also set plain cookie as development/localhost fallback
+    if (cookieName !== "better-auth.session_token") {
+      response.cookies.set("better-auth.session_token", signedCookieValue, {
+        ...cookieAttrs,
+        secure: false,
+        expires: session.expiresAt,
+      });
+    }
 
     return response;
   } catch (err: unknown) {

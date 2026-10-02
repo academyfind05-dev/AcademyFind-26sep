@@ -174,6 +174,26 @@ export default function RegisterComponent() {
     }
   }, [phoneRegName, router, redirectTarget]);
 
+  // Check that the phone number is not already registered before requesting an OTP from Firebase
+  const handleBeforeSendOtp = useCallback(async (phoneNumber: string) => {
+    try {
+      const res = await fetch("/api/auth/check-phone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phoneNumber, mode: "register" }),
+      });
+      const data = await res.json();
+      if (!data.allowed) {
+        toast.error(data.error || "This phone number is already registered. Please log in instead.");
+        return false;
+      }
+      return true;
+    } catch {
+      toast.error("Failed to verify mobile number. Please try again.");
+      return false;
+    }
+  }, []);
+
   return (
     <main className="min-h-screen bg-[#f8f8f8] p-4 lg:p-8">
       <div className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-7xl overflow-hidden rounded-[32px] bg-white shadow-2xl">
@@ -463,6 +483,7 @@ export default function RegisterComponent() {
       <PhoneOtpModal
         isOpen={isPhoneModalOpen}
         onClose={() => setIsPhoneModalOpen(false)}
+        onBeforeSendOtp={handleBeforeSendOtp}
         onVerified={handlePhoneRegisterVerified}
         title="Register with Phone"
         subtitle="Enter your mobile number to create an account with OTP verification."
