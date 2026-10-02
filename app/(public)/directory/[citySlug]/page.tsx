@@ -7,10 +7,14 @@ export const revalidate = 3600; // Cache for 1 hour
 
 interface PageProps {
   params: Promise<{ citySlug: string }>;
+  searchParams?: Promise<{ page?: string }>;
 }
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const { citySlug } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const page = resolvedSearchParams.page;
+
   const city = await prisma.city.findUnique({
     where: { slug: citySlug },
     select: { name: true }
@@ -18,9 +22,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   if (!city) return { title: "Not Found" };
 
+  const canonicalUrl = page && page !== "1" 
+    ? `https://academyfind.com/directory/${citySlug}?page=${page}`
+    : `https://academyfind.com/directory/${citySlug}`;
+
   return {
     title: `Top Coaching Institutes & Tutors in ${city.name} - AcademyFind`,
-    description: `Explore the complete directory of all top-rated coaching institutes, schools, and tutors in ${city.name}. Read reviews and find the best educational centers near you.`,
+    description: `Explore the complete directory of verified coaching institutes, schools, and tutors in ${city.name}. Read reviews and find the best educational centers near you.`,
     robots: {
       index: true,
       follow: true,
@@ -33,34 +41,46 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       },
     },
     alternates: {
-      canonical: `https://academyfind.com/directory/${citySlug}`,
+      canonical: canonicalUrl,
     },
   };
 }
 
-export default async function CityDirectoryPage({ params }: PageProps) {
+export default async function CityDirectoryPage({ params, searchParams }: PageProps) {
   const { citySlug } = await params;
-  
-  const city = await prisma.city.findUnique({
-    where: { slug: citySlug },
-    include: {
-      institutes: {
-        where: { isActive: true },
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          categories: {
-            take: 1,
-            include: { category: true }
-          }
-        },
-        orderBy: { name: 'asc' }
-      }
-    }
-  });
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const currentPage = Math.max(1, parseInt(resolvedSearchParams.page || "1", 10) || 1);
+  const pageSize = 60;
+  const skip = (currentPage - 1) * pageSize;
+
+  const [city, totalInstitutes, institutes] = await Promise.all([
+    prisma.city.findUnique({
+      where: { slug: citySlug },
+      select: { id: true, name: true, slug: true }
+    }),
+    prisma.institute.count({
+      where: { city: { slug: citySlug }, isActive: true }
+    }),
+    prisma.institute.findMany({
+      where: { city: { slug: citySlug }, isActive: true },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        categories: {
+          take: 1,
+          include: { category: true }
+        }
+      },
+      orderBy: { name: 'asc' },
+      skip: skip,
+      take: pageSize
+    })
+  ]);
 
   if (!city) return notFound();
+
+  const totalPages = Math.ceil(totalInstitutes / pageSize);
 
   // Fetch all active categories present in this city for heavy interlinking
   const cityCategories = await prisma.category.findMany({
@@ -94,8 +114,8 @@ export default async function CityDirectoryPage({ params }: PageProps) {
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm mb-10">
           <p className="text-lg text-slate-700 leading-relaxed mb-6">
             Welcome to the ultimate directory for coaching institutes and schools in <strong>{city.name}</strong>. 
-            Browse our complete alphabetical list of all {city.institutes.length} verified educational centers below. 
-            You can also filter directly by the top categories available in your city to find the best match for your needs.
+            Browse verified educational centers below ({totalInstitutes.toLocaleString()} total listed). 
+            You can also filter directly by top categories available in {city.name} to find the best match for your needs.
           </p>
 
           {/* Heavy Interlinking: Category Silos */}
@@ -119,26 +139,66 @@ export default async function CityDirectoryPage({ params }: PageProps) {
           )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-4 gap-x-8 mb-16">
-          {city.institutes.map((inst) => (
+        {/* Capped Paginated Institute Grid (Fast 60-Item DOM) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-4 gap-x-8 mb-8">
+          {institutes.map((inst) => (
             <Link 
               key={inst.id} 
               href={`/institute/${inst.id}-${inst.slug}`}
               className="group py-2 border-b border-slate-200 flex flex-col"
             >
-              <span className="text-slate-900 font-medium group-hover:text-amber-600 transition-colors">
+              <span className="text-slate-900 font-medium group-hover:text-amber-600 transition-colors line-clamp-1">
                 {inst.name}
               </span>
               <span className="text-xs text-slate-500 mt-1 uppercase tracking-wider">
-                {inst.categories[0]?.category.name || "Institute"}
+                {inst.categories[0]?.category?.name || "Institute"}
               </span>
             </Link>
           ))}
         </div>
 
+        {/* Pagination Navigation */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between border-t border-slate-200 pt-6 mb-16">
+            <div>
+              {currentPage > 1 ? (
+                <Link
+                  href={currentPage === 2 ? `/directory/${citySlug}` : `/directory/${citySlug}?page=${currentPage - 1}`}
+                  className="inline-flex items-center px-4 py-2 border border-slate-300 rounded-xl text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 shadow-sm transition"
+                >
+                  ← Previous
+                </Link>
+              ) : (
+                <span className="inline-flex items-center px-4 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-400 bg-slate-50 cursor-not-allowed">
+                  ← Previous
+                </span>
+              )}
+            </div>
+
+            <span className="text-sm font-medium text-slate-600">
+              Page {currentPage} of {totalPages}
+            </span>
+
+            <div>
+              {currentPage < totalPages ? (
+                <Link
+                  href={`/directory/${citySlug}?page=${currentPage + 1}`}
+                  className="inline-flex items-center px-4 py-2 border border-slate-300 rounded-xl text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 shadow-sm transition"
+                >
+                  Next →
+                </Link>
+              ) : (
+                <span className="inline-flex items-center px-4 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-400 bg-slate-50 cursor-not-allowed">
+                  Next →
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Heavy Interlinking: Cross-City */}
         {otherCities.length > 0 && (
-          <div className="mt-16 pt-10 border-t border-slate-200">
+          <div className="mt-8 pt-10 border-t border-slate-200">
             <h3 className="text-2xl font-bold text-slate-900 mb-6">
               Explore Educational Institutes in Other Cities
             </h3>
