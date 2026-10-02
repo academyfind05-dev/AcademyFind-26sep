@@ -1,13 +1,40 @@
+import { prisma } from '@/lib/prisma';
+
+export const revalidate = 86400; // Cache for 24 hours
+
 export async function GET() {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://academyfind.com';
   
-  const staticPages = ['', '/about', '/directory', '/categories', '/cities', '/blog', '/contact', '/careers', '/user/life-coach','/privacy-policy','/terms-condition'];
+  const staticPages = [
+    '',
+    '/about',
+    '/directory',
+    '/categories',
+    '/cities',
+    '/blog',
+    '/contact',
+    '/careers',
+    '/user/life-coach',
+    '/privacy-policy',
+    '/terms-condition',
+  ];
+
+  // Fetch active cities to include their directory hubs
+  const activeCities = await prisma.city.findMany({
+    where: {
+      institutes: { some: { isActive: true } },
+    },
+    select: { slug: true },
+  });
+
+  const cityDirectoryPages = activeCities.map((c) => `/directory/${c.slug}`);
+  const allPages = [...staticPages, ...cityDirectoryPages];
   
-  const urls = staticPages.map((page: any) => `
+  const urls = allPages.map((page: string) => `
   <url>
     <loc>${baseUrl}${page}</loc>
     <changefreq>${page === '' ? 'daily' : 'weekly'}</changefreq>
-    <priority>${page === '' ? '1.0' : '0.8'}</priority>
+    <priority>${page === '' ? '1.0' : page.startsWith('/directory') ? '0.9' : '0.8'}</priority>
   </url>
   `).join('');
 
@@ -16,5 +43,10 @@ export async function GET() {
   ${urls}
 </urlset>`;
 
-  return new Response(xml, { headers: { 'Content-Type': 'text/xml' } });
+  return new Response(xml, {
+    headers: {
+      'Content-Type': 'text/xml',
+      'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate',
+    },
+  });
 }

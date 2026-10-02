@@ -77,7 +77,7 @@ const formatCurrency = (amount?: number | null) => {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { idSlug } = await params;
   const id = extractId(idSlug);
-  const institute = await getInstituteById(id);
+  const institute = await getCachedInstituteById(id);
 
   if (!institute) return { title: "Institute Not Found | AcademyFind" };
 
@@ -86,8 +86,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const description = institute.metaDescription || institute.description?.substring(0, 155) || `Get complete details about ${institute.name} in ${institute.city.name}. Check ${currentYear} fee structure, read genuine student reviews, and get admission guidance. ⚡ Click to learn more.`;
 
   const safeOgImage = getSafeImageUrl(institute.logo, institute.imageUrl);
-
-  const baseUrl = institute.providerType === 'INDIVIDUAL' ? '/educator' : '/institute';
+  const canonicalUrl = `https://academyfind.com/institute/${idSlug}`;
 
   let keywordArray = [
     `${institute.name} ${institute.city.name}`,
@@ -106,7 +105,18 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title,
     description,
-    alternates: { canonical: `https://academyfind.com${baseUrl}/${idSlug}` },
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+        "max-snippet": -1,
+        "max-image-preview": "large",
+        "max-video-preview": -1,
+      },
+    },
+    alternates: { canonical: canonicalUrl },
     keywords: keywordArray,
     openGraph: {
       title,

@@ -22,9 +22,19 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     title: `Top Coaching Institutes & Tutors in ${city.name} - AcademyFind`,
     description: `Explore the complete directory of all top-rated coaching institutes, schools, and tutors in ${city.name}. Read reviews and find the best educational centers near you.`,
     robots: {
-      index: false,
+      index: true,
       follow: true,
-    }
+      googleBot: {
+        index: true,
+        follow: true,
+        "max-snippet": -1,
+        "max-image-preview": "large",
+        "max-video-preview": -1,
+      },
+    },
+    alternates: {
+      canonical: `https://academyfind.com/directory/${citySlug}`,
+    },
   };
 }
 
