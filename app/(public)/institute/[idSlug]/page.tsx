@@ -40,7 +40,7 @@ import { UnlockBasicFeaturesOverlay } from "@/components/institutes/UnlockBasicF
 import { VerifiedBadge } from "@/components/institutes/VerifiedBadge";
 import { NoticeBoardSection } from "@/components/notices/NoticeBoardSection";
 
-export const revalidate = 0;
+export const revalidate = 3600; // ISR: cache pages for 1 hour — critical for Googlebot TTFB
 
 interface PageProps {
   params: Promise<{ idSlug: string }>;

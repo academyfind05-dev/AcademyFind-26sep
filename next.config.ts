@@ -55,6 +55,59 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [
+      // www → non-www canonical redirect (prevents duplicate indexing)
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "www.academyfind.com" }],
+        destination: "https://academyfind.com/:path*",
+        permanent: true,
+      },
+    ];
+  },
+  async headers() {
+    return [
+      {
+        // SEO + Security headers for all routes
+        source: "/(.*)",
+        headers: [
+          {
+            key: "X-Robots-Tag",
+            value: "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          },
+          {
+            key: "X-Content-Type-Options",
+            value: "nosniff",
+          },
+          {
+            key: "Referrer-Policy",
+            value: "strict-origin-when-cross-origin",
+          },
+        ],
+      },
+      {
+        // Long cache for static assets (images, fonts, icons)
+        source: "/(.*)\\.(png|jpg|jpeg|gif|svg|ico|webp|woff|woff2)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      {
+        // Prevent indexing of API routes
+        source: "/api/(.*)",
+        headers: [
+          {
+            key: "X-Robots-Tag",
+            value: "noindex, nofollow",
+          },
+        ],
+      },
+    ];
+  },
   // Turbopack is the default bundler in Next.js 16.
   // serverExternalPackages above handles firebase-admin externalization natively.
   // Empty turbopack config suppresses the "webpack config found, no turbopack config" warning.
@@ -62,3 +115,4 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+

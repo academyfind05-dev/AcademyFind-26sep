@@ -30,9 +30,11 @@ export async function GET() {
   const cityDirectoryPages = activeCities.map((c) => `/directory/${c.slug}`);
   const allPages = [...staticPages, ...cityDirectoryPages];
   
+  const today = new Date().toISOString().split('T')[0];
   const urls = allPages.map((page: string) => `
   <url>
     <loc>${baseUrl}${page}</loc>
+    <lastmod>${today}</lastmod>
     <changefreq>${page === '' ? 'daily' : 'weekly'}</changefreq>
     <priority>${page === '' ? '1.0' : page.startsWith('/directory') ? '0.9' : '0.8'}</priority>
   </url>

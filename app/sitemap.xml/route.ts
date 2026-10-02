@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET() {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://academyfind.com';
+  const today = new Date().toISOString();
 
   const totalInstitutes = await prisma.institute.count({
     where: { isActive: true, isPublished: true } 
@@ -15,6 +16,7 @@ export async function GET() {
     instituteSitemaps += `
   <sitemap>
     <loc>${baseUrl}/sitemap-institutes/${i}</loc>
+    <lastmod>${today}</lastmod>
   </sitemap>`;
   }
 
@@ -22,12 +24,15 @@ export async function GET() {
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <sitemap>
     <loc>${baseUrl}/sitemap-static.xml</loc>
+    <lastmod>${today}</lastmod>
   </sitemap>
   <sitemap>
     <loc>${baseUrl}/sitemap-categories-city.xml</loc>
+    <lastmod>${today}</lastmod>
   </sitemap>
   <sitemap>
     <loc>${baseUrl}/sitemap-blogs.xml</loc>
+    <lastmod>${today}</lastmod>
   </sitemap>
   ${instituteSitemaps}
 </sitemapindex>`;

@@ -21,6 +21,8 @@ export const metadata: Metadata = {
   },
 };
 
+export const revalidate = 86400; // Cache directory hub for 24h for fast Googlebot TTFB
+
 export default async function DirectoryPage() {
   // Fetch all cities that have active institutes
   const cities = await prisma.city.findMany({

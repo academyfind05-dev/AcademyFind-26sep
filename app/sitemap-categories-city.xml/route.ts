@@ -59,6 +59,7 @@ export async function GET() {
     }
   }
 
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
   let urls = '';
 
   // 1. Valid Category hub pages (/jee-coaching)
@@ -66,6 +67,7 @@ export async function GET() {
     urls += `
   <url>
     <loc>${baseUrl}/${cat.slug}</loc>
+    <lastmod>${today}</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>`;
@@ -76,6 +78,7 @@ export async function GET() {
     urls += `
   <url>
     <loc>${baseUrl}/${pair}</loc>
+    <lastmod>${today}</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>`;
