@@ -1,7 +1,97 @@
 "use client";
 
-import React, { useEffect } from "react";
-import { useToaster, ToastBar, resolveValue, toast } from "react-hot-toast";
+import React, { useEffect, useRef, useCallback, memo } from "react";
+import { useToaster, ToastBar, resolveValue, toast, type Toast } from "react-hot-toast";
+
+interface ToastItemProps {
+  toast: Toast;
+  offset: number;
+  onHeightUpdate: (id: string, height: number) => void;
+}
+
+const ToastItem = memo(function ToastItem({
+  toast: t,
+  offset,
+  onHeightUpdate,
+}: ToastItemProps) {
+  const lastHeightRef = useRef<number>(t.height || 0);
+  const top = (t.position || "top-center").includes("top");
+
+  // Stable ref callback: will not re-execute on every parent render
+  const setRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      if (!el) return;
+
+      const measureAndReport = () => {
+        const height = el.getBoundingClientRect().height;
+        // Strictly guard against dispatching if height has not meaningfully changed (>1px)
+        if (height > 0 && Math.abs(height - lastHeightRef.current) > 1) {
+          lastHeightRef.current = height;
+          // Defer update to next animation frame to prevent synchronous state update cycles during render
+          requestAnimationFrame(() => {
+            onHeightUpdate(t.id, height);
+          });
+        }
+      };
+
+      measureAndReport();
+
+      const observer = new MutationObserver(measureAndReport);
+      observer.observe(el, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+      });
+
+      return () => {
+        observer.disconnect();
+      };
+    },
+    [t.id, onHeightUpdate]
+  );
+
+  return (
+    <div
+      ref={setRef}
+      style={{
+        position: "absolute",
+        left: 0,
+        right: 0,
+        top: top ? 0 : undefined,
+        bottom: !top ? 0 : undefined,
+        display: "flex",
+        justifyContent: "center",
+        transition: "all 230ms cubic-bezier(.21,1.02,.73,1)",
+        transform: `translateY(${offset * (top ? 1 : -1)}px)`,
+        pointerEvents: t.visible ? "auto" : "none",
+        cursor: "pointer",
+      }}
+      onClick={(e) => {
+        // Don't auto-dismiss if user clicked an interactive control inside a custom toast
+        const target = e.target as HTMLElement | null;
+        if (target?.closest("button, a, input, select, textarea")) {
+          return;
+        }
+        toast.dismiss(t.id);
+      }}
+      role="status"
+      aria-live="polite"
+    >
+      {t.type === "custom" ? (
+        resolveValue(t.message, t)
+      ) : (
+        <ToastBar toast={t} position={t.position || "top-center"}>
+          {({ icon, message }) => (
+            <>
+              {icon}
+              {message}
+            </>
+          )}
+        </ToastBar>
+      )}
+    </div>
+  );
+});
 
 /**
  * AppToaster
@@ -13,6 +103,7 @@ import { useToaster, ToastBar, resolveValue, toast } from "react-hot-toast";
  * 2. Auto-dismisses toasts reliably after 3.5 seconds (3-4 seconds).
  * 3. Tapping or clicking any toast dismisses it immediately.
  * 4. Resumes all timers on touch/pointer release.
+ * 5. Uses memoized ToastItem with height caching to prevent React infinite update loop (Error #185).
  */
 export default function AppToaster() {
   const { toasts, handlers } = useToaster({
@@ -76,64 +167,13 @@ export default function AppToaster() {
           defaultPosition: "top-center",
         });
 
-        const top = (t.position || "top-center").includes("top");
-
         return (
-          <div
+          <ToastItem
             key={t.id}
-            ref={(el) => {
-              if (el) {
-                const updateHeight = () => {
-                  const height = el.getBoundingClientRect().height;
-                  handlers.updateHeight(t.id, height);
-                };
-                updateHeight();
-                const observer = new MutationObserver(updateHeight);
-                observer.observe(el, {
-                  subtree: true,
-                  childList: true,
-                  characterData: true,
-                });
-                return () => observer.disconnect();
-              }
-            }}
-            style={{
-              position: "absolute",
-              left: 0,
-              right: 0,
-              top: top ? 0 : undefined,
-              bottom: !top ? 0 : undefined,
-              display: "flex",
-              justifyContent: "center",
-              transition: "all 230ms cubic-bezier(.21,1.02,.73,1)",
-              transform: `translateY(${offset * (top ? 1 : -1)}px)`,
-              pointerEvents: t.visible ? "auto" : "none",
-              cursor: "pointer",
-            }}
-            onClick={(e) => {
-              // Don't auto-dismiss if user clicked an interactive control inside a custom toast
-              const target = e.target as HTMLElement | null;
-              if (target?.closest("button, a, input, select, textarea")) {
-                return;
-              }
-              toast.dismiss(t.id);
-            }}
-            role="status"
-            aria-live="polite"
-          >
-            {t.type === "custom" ? (
-              resolveValue(t.message, t)
-            ) : (
-              <ToastBar toast={t} position={t.position || "top-center"}>
-                {({ icon, message }) => (
-                  <>
-                    {icon}
-                    {message}
-                  </>
-                )}
-              </ToastBar>
-            )}
-          </div>
+            toast={t}
+            offset={offset}
+            onHeightUpdate={handlers.updateHeight}
+          />
         );
       })}
     </div>

@@ -164,14 +164,18 @@ export default function LoginComponent({ stats }: { stats?: PlatformStats }) {
         toast.success("Logged in successfully!");
         // Short delay to let cookie set before redirect
         setTimeout(() => router.push(redirectTarget), 300);
+        return true;
       } else if (data.code === "USER_NOT_FOUND") {
         toast.error("No account found with this number. Please register first.");
         setIsPhoneModalOpen(false);
+        return false;
       } else {
         toast.error(data.error ?? "Login failed. Please try again.");
+        return false;
       }
     } catch {
       toast.error("An error occurred. Please try again.");
+      return false;
     } finally {
       setIsLoading(false);
     }
