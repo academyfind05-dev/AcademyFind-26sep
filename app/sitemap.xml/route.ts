@@ -4,7 +4,7 @@ export async function GET() {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://academyfind.com';
 
   const totalInstitutes = await prisma.institute.count({
-    where: { isActive: true } 
+    where: { isActive: true, isPublished: true } 
   });
   
   const limit = 6000; 

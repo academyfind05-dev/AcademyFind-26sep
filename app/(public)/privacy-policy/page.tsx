@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   title: "Privacy Policy | AcademyFind",
   description: "Learn how AcademyFind collects, uses, and protects your personal data and privacy. We are committed to safeguarding your information.",
   alternates: {
-    canonical: "https://www.academyfind.com/privacy-policy",
+    canonical: "https://academyfind.com/privacy-policy",
   },
   robots: {
     index: true,

@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   title: "Explore Coaching Institutes by City in India | AcademyFind",
   description: "Discover top-rated coaching centers, schools, tuition classes, and learning hubs across all major cities and states in India. Find the best education near you.",
   alternates: {
-    canonical: "https://www.academyfind.com/cities", // Apna actual route check kar lena
+    canonical: "https://academyfind.com/cities",
   },
   robots: {
     index: true,

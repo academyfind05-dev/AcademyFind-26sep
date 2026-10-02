@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   title: "Contact AcademyFind | Get in Touch for Support & Partnerships",
   description: "Have questions about coaching institutes, or want to list your institute on AcademyFind? Reach out to our support team for quick assistance.",
   alternates: {
-    canonical: "https://www.academyfind.com/contact",
+    canonical: "https://academyfind.com/contact",
   },
   robots: {
     index: true,

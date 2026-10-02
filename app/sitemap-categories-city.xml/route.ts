@@ -5,35 +5,57 @@ export const revalidate = 86400; // Cache sitemap for 24 hours
 export async function GET() {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://academyfind.com';
   
-  // 1. Only categories that actually have active institutes
+  // 1. Only categories that actually have at least 1 active and published institute
   const categories = await prisma.category.findMany({
     where: {
       institutes: {
         some: {
-          institute: { isActive: true },
+          institute: {
+            isActive: true,
+            isPublished: true,
+          },
         },
       },
     },
     select: { slug: true },
   });
 
-  // 2. Fetch distinct category + city pairs with active institutes
-  const activePairs = await prisma.instituteCategory.findMany({
-    where: {
-      institute: {
-        isActive: true,
-      },
-    },
-    select: {
-      category: { select: { slug: true } },
-      institute: { select: { city: { select: { slug: true } } } },
-    },
-  });
-
+  // 2. Fetch distinct category + city combinations that have at least 1 active & published institute
   const uniquePairs = new Set<string>();
-  for (const item of activePairs) {
-    if (item.category?.slug && item.institute?.city?.slug) {
-      uniquePairs.add(`${item.category.slug}/${item.institute.city.slug}`);
+
+  try {
+    const rawPairs = await prisma.$queryRaw<Array<{ categorySlug: string; citySlug: string }>>`
+      SELECT DISTINCT c.slug AS "categorySlug", ci.slug AS "citySlug"
+      FROM "InstituteCategory" ic
+      JOIN "Institute" i ON i.id = ic."instituteId"
+      JOIN "Category" c ON c.id = ic."categoryId"
+      JOIN "City" ci ON ci.id = i."cityId"
+      WHERE i."isActive" = true AND i."isPublished" = true
+    `;
+    for (const item of rawPairs) {
+      if (item.categorySlug && item.citySlug) {
+        uniquePairs.add(`${item.categorySlug}/${item.citySlug}`);
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching raw category-city pairs, falling back to prisma:', error);
+    const activePairs = await prisma.instituteCategory.findMany({
+      where: {
+        institute: {
+          isActive: true,
+          isPublished: true,
+        },
+      },
+      select: {
+        category: { select: { slug: true } },
+        institute: { select: { city: { select: { slug: true } } } },
+      },
+      take: 5000,
+    });
+    for (const item of activePairs) {
+      if (item.category?.slug && item.institute?.city?.slug) {
+        uniquePairs.add(`${item.category.slug}/${item.institute.city.slug}`);
+      }
     }
   }
 

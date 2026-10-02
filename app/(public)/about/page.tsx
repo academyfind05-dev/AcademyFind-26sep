@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   title: "About Us | AcademyFind - India's Most Trusted Education Directory",
   description: "Learn about AcademyFind's mission to simplify education search. Discover how we connect students with the top coaching institutes, schools, and hostels across India.",
   alternates: {
-    canonical: 'https://www.academyfind.com/about',
+    canonical: 'https://academyfind.com/about',
   },
   robots: {
     index: true,

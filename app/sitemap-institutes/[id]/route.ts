@@ -11,7 +11,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const skip = pageId * limit;
 
   const institutes = await prisma.institute.findMany({
-    where: { isActive: true },
+    where: { isActive: true, isPublished: true },
     select: { id: true, slug: true, updatedAt: true },
     skip: skip,
     take: limit,

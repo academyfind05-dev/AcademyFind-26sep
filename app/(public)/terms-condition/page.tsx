@@ -2,10 +2,10 @@ import React from "react";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy | AcademyFind",
+  title: "Terms & Conditions | AcademyFind",
   description: "Read the terms of service, user guidelines, and rules for using the AcademyFind platform.",
   alternates: {
-    canonical: "https://www.academyfind.com/terms-condition",
+    canonical: "https://academyfind.com/terms-condition",
   },
   robots: {
     index: true,

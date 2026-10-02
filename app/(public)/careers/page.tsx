@@ -11,12 +11,12 @@ export const metadata: Metadata = {
   title: "Careers at AcademyFind | Join Our Mission",
   description: "Explore exciting career opportunities at AcademyFind. Join our team and help millions of students discover the best education across India.",
   alternates: {
-    canonical: "https://www.academyfind.com/careers",
+    canonical: "https://academyfind.com/careers",
   },
   openGraph: {
     title: "Careers at AcademyFind",
     description: "Join us in our mission to democratize education discovery.",
-    url: "https://www.academyfind.com/careers",
+    url: "https://academyfind.com/careers",
     siteName: "AcademyFind",
     type: "website",
   }
