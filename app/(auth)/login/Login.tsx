@@ -115,7 +115,7 @@ export default function LoginComponent({ stats }: { stats?: PlatformStats }) {
       }
 
       toast.success("Welcome back!");
-      router.push(redirectTarget);
+      window.location.href = redirectTarget;
     } catch {
       toast.error("Something went wrong during login.");
     } finally {
@@ -140,7 +140,7 @@ export default function LoginComponent({ stats }: { stats?: PlatformStats }) {
         setShowOtpScreen(false);
       } else {
         toast.success("Verified and logged in successfully!");
-        router.push(redirectTarget);
+        window.location.href = redirectTarget;
       }
     } catch {
       toast.error("Something went wrong during verification.");
@@ -162,8 +162,10 @@ export default function LoginComponent({ stats }: { stats?: PlatformStats }) {
 
       if (data.success) {
         toast.success("Logged in successfully!");
-        // Short delay to let cookie set before redirect
-        setTimeout(() => router.push(redirectTarget), 300);
+        // Full navigation ensures server layout re-evaluates and client cache is wiped
+        setTimeout(() => {
+          window.location.href = redirectTarget;
+        }, 200);
         return true;
       } else if (data.code === "USER_NOT_FOUND") {
         toast.error("No account found with this number. Please register first.");

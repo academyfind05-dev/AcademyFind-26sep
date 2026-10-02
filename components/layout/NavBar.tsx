@@ -39,7 +39,9 @@ import { NotificationBell } from "@/components/layout/NotificationBell";
 import { ChatNavButton } from "@/components/layout/ChatNavButton";
 import { buildAuthHref } from "@/lib/auth/redirect-utils";
 
-export default function Navbar({ session }: { session: any }) {
+export default function Navbar({ session: initialSession }: { session?: any }) {
+  const { data: clientSession } = authClient.useSession();
+  const session = clientSession !== undefined ? clientSession : initialSession;
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
 

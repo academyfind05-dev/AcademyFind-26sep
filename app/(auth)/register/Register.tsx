@@ -161,7 +161,9 @@ export default function RegisterComponent() {
             : "Logged in to your existing account!"
         );
         setIsPhoneModalOpen(false);
-        setTimeout(() => router.push(redirectTarget), 300);
+        setTimeout(() => {
+          window.location.href = redirectTarget;
+        }, 200);
       } else {
         toast.error(data.error ?? "Registration failed. Please try again.");
         setIsPhoneModalOpen(false);

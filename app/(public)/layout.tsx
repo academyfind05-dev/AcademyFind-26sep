@@ -9,6 +9,8 @@ import { AuthPromptModal } from "@/components/layout/auth-prompt-model";
 import { redirect } from "next/navigation";
 import GlobalCallbackFAB from "@/components/User/GlobalCallBack";
 
+export const dynamic = "force-dynamic";
+
 export default async function PublicLayout({
   children,
 }: {
