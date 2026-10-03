@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import Script from "next/script";
 import Image from "next/image";
 import Link from "next/link";
@@ -86,7 +86,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const description = institute.metaDescription || institute.description?.substring(0, 155) || `Get complete details about ${institute.name} in ${institute.city.name}. Check ${currentYear} fee structure, read genuine student reviews, and get admission guidance. ⚡ Click to learn more.`;
 
   const safeOgImage = getSafeImageUrl(institute.logo, institute.imageUrl);
-  const canonicalUrl = `https://academyfind.com/institute/${idSlug}`;
+  const properSlug = institute.slug ? `${institute.id}-${institute.slug}` : institute.id;
+  const canonicalUrl = `https://academyfind.com/institute/${properSlug}`;
 
   let keywordArray = [
     `${institute.name} ${institute.city.name}`,
@@ -139,6 +140,12 @@ export default async function InstitutePage({ params }: PageProps) {
   const institute = await getCachedInstituteById(id);
 
   if (!institute) notFound();
+
+  // Canonical 301 permanent redirect if URL doesn't match official slug URL
+  const properSlug = institute.slug ? `${institute.id}-${institute.slug}` : institute.id;
+  if (idSlug !== properSlug) {
+    permanentRedirect(`/institute/${properSlug}`);
+  }
 
   // Session for join bar
   const session = await auth.api.getSession({ headers: await headers() });
