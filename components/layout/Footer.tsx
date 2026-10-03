@@ -4,48 +4,72 @@ import Image from "next/image";
 import { FaFacebook, FaInstagram, FaLinkedinIn, FaTelegram, FaWhatsapp, FaYoutube } from "react-icons/fa";
 const categories = [
   {
-    name: "JEE",
+    name: "JEE Coaching",
     slug: "jee-coaching",
   },
   {
-    name: "UPSC",
+    name: "NEET Coaching",
+    slug: "neet-coaching",
+  },
+  {
+    name: "UPSC Coaching",
     slug: "upsc-coaching",
   },
   {
-    name: "Dance",
+    name: "SSC Coaching",
+    slug: "ssc-coaching",
+  },
+  {
+    name: "Coding Classes",
+    slug: "coding-classes",
+  },
+  {
+    name: "Dance Classes",
     slug: "dance-classes",
   },
   {
-    name: "View All",
+    name: "View All Categories",
     slug: "categories",
   },
 ];
 
 const cities = [
   {
-    name: "Noida",
-    slug: "categories?city=noida",
+    name: "Delhi",
+    slug: "directory/delhi",
   },
   {
-    name: "Delhi",
-    slug: "categories?city=delhi",
+    name: "Noida",
+    slug: "directory/noida",
+  },
+  {
+    name: "Gurugram",
+    slug: "directory/gurugram",
   },
   {
     name: "Greater Noida",
-    slug: "categories?city=greater-noida",
+    slug: "directory/greater-noida",
   },
   {
     name: "Faridabad",
-    slug: "categories?city=faridabad",
-  },
-  {
-    name: "Meerut",
-    slug: "categories?city=meerut",
+    slug: "directory/faridabad",
   },
   {
     name: "Ghaziabad",
-    slug: "categories?city=ghaziabad",
-  }
+    slug: "directory/ghaziabad",
+  },
+  {
+    name: "Jaipur",
+    slug: "directory/jaipur",
+  },
+  {
+    name: "Kota",
+    slug: "directory/kota",
+  },
+  {
+    name: "Lucknow",
+    slug: "directory/lucknow",
+  },
 ];
 
 const comparisons = [

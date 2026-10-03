@@ -403,15 +403,40 @@ export default async function InstitutePage({ params }: PageProps) {
   const hasVerifiedAccess = ["PREMIUM", "ULTRA", "VERIFIED"].includes(plan);
   const hasUltraAccess = ["ULTRA", "PREMIUM"].includes(plan);
 
-  // Similar Institutes
+  // Similar Institutes: try same category first, fill up to 6 with top institutes in the same city
   let similarInstitutes: any[] = [];
-  if (institute.categories[0]?.categoryId && institute.cityId) {
-    similarInstitutes = await prisma.institute.findMany({
-      where: { cityId: institute.cityId, isActive: true, id: { not: institute.id }, categories: { some: { categoryId: institute.categories[0].categoryId } } },
-      take: 3,
-      orderBy: { averageRating: 'desc' },
-      include: { city: true, categories: { include: { category: true } } }
-    });
+  if (institute.cityId) {
+    const categoryId = institute.categories[0]?.categoryId;
+    if (categoryId) {
+      similarInstitutes = await prisma.institute.findMany({
+        where: {
+          cityId: institute.cityId,
+          isActive: true,
+          isPublished: true,
+          id: { not: institute.id },
+          categories: { some: { categoryId } }
+        },
+        take: 6,
+        orderBy: [{ planWeight: 'desc' }, { averageRating: 'desc' }],
+        include: { city: true, categories: { include: { category: true } } }
+      });
+    }
+
+    if (similarInstitutes.length < 6) {
+      const existingIds = [institute.id, ...similarInstitutes.map((s: any) => s.id)];
+      const cityFallbacks = await prisma.institute.findMany({
+        where: {
+          cityId: institute.cityId,
+          isActive: true,
+          isPublished: true,
+          id: { notIn: existingIds }
+        },
+        take: 6 - similarInstitutes.length,
+        orderBy: [{ planWeight: 'desc' }, { averageRating: 'desc' }],
+        include: { city: true, categories: { include: { category: true } } }
+      });
+      similarInstitutes = [...similarInstitutes, ...cityFallbacks];
+    }
   }
 
   const safeSchemaImage = getSafeImageUrl(institute.logo, institute.imageUrl);
@@ -438,27 +463,35 @@ export default async function InstitutePage({ params }: PageProps) {
   })) || [];
 
   // ── 3. JSON-LD ──
-  const localBusinessSchema = {
+  const localBusinessSchema: any = {
     "@context": "https://schema.org",
-    "@type": ["LocalBusiness", "EducationalOrganization"],
+    "@type": ["EducationalOrganization", "LocalBusiness"],
+    "@id": `https://academyfind.com/institute/${properSlug}#organization`,
     "name": institute.name,
     "image": safeSchemaImage,
     "address": {
       "@type": "PostalAddress",
-      "streetAddress": institute.address || "",
+      "streetAddress": institute.address || institute.city.name,
       "addressLocality": institute.city.name,
+      "addressRegion": institute.city.state || "",
       "addressCountry": "IN"
     },
-    "telephone": institute.phone || "",
-    "url": institute.website || `https://academyfind.com/institute/${idSlug}`,
+    ...(institute.phone ? { "telephone": institute.phone } : {}),
+    "url": `https://academyfind.com/institute/${properSlug}`,
     "priceRange": "₹₹",
-    "aggregateRating": {
-      "@type": "AggregateRating",
-      "ratingValue": displayRating > 0 ? displayRating : 4.8,
-      "reviewCount": displayReviewCount > 0 ? displayReviewCount : 12
-    },
+    ...(displayReviewCount > 0 && displayRating > 0 ? {
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": Number(displayRating.toFixed(1)),
+        "reviewCount": displayReviewCount
+      }
+    } : {}),
     ...(reviewsSchema.length > 0 && { "review": reviewsSchema })
   };
+
+  const breadcrumbCategoryUrl = institute.categories[0]?.category?.slug && institute.city?.slug
+    ? `https://academyfind.com/${institute.categories[0].category.slug}/${institute.city.slug}`
+    : `https://academyfind.com/directory/${institute.city.slug}`;
 
   const breadcrumbSchema = {
     "@context": "https://schema.org",
@@ -467,20 +500,20 @@ export default async function InstitutePage({ params }: PageProps) {
       {
         "@type": "ListItem",
         "position": 1,
-        "name": institute.categories[0]?.category.name || "Institute",
-        "item": `https://academyfind.com/${institute.categories[0]?.category.slug}`
+        "name": "Home",
+        "item": "https://academyfind.com"
       },
       {
         "@type": "ListItem",
         "position": 2,
-        "name": institute.city.name,
-        "item": `https://academyfind.com/${institute.categories[0]?.category.slug}/${institute.city.slug}`
+        "name": institute.categories[0]?.category?.name ? `${institute.categories[0].category.name} in ${institute.city.name}` : institute.city.name,
+        "item": breadcrumbCategoryUrl
       },
       {
         "@type": "ListItem",
         "position": 3,
         "name": institute.name,
-        "item": `https://academyfind.com/institute/${idSlug}`
+        "item": `https://academyfind.com/institute/${properSlug}`
       }
     ]
   };
