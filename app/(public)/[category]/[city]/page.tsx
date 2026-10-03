@@ -90,7 +90,9 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
     ? `Best ${categoryName} in ${cityName} - Page ${currentPage} | AcademyFind`
     : `Best ${categoryName} in ${cityName} ${currentYear} | Fees, Reviews & Admissions`;
 
-  const seoDescription = `Find the best ${categoryName} in ${cityName}. Compare fees, read student reviews, check batch timings, and get directions. Updated ${currentYear} listings on AcademyFind.`;
+  const seoDescription = currentPage
+    ? `Page ${currentPage} of best ${categoryName} institutes in ${cityName}. Browse more listings, compare fees, student reviews, and find the right coaching center. AcademyFind updated ${currentYear}.`
+    : `Find the best ${categoryName} in ${cityName}. Compare fees, read student reviews, check batch timings, and get directions. Updated ${currentYear} listings on AcademyFind.`;
 
   return {
     title: seoTitle,
@@ -100,20 +102,19 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
       canonical: canonicalUrl,  // ← self-referential now
     },
 
-    // Page 2+ = noindex but follow
-    robots: currentPage
-      ? { index: false, follow: true }
-      : {
+    // Index ALL pages — paginated pages contain unique institute listings
+    // noindex was hiding 90%+ of institute listings from Google
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
         index: true,
         follow: true,
-        googleBot: {
-          index: true,
-          follow: true,
-          "max-snippet": -1,
-          "max-image-preview": "large",
-          "max-video-preview": -1,
-        },
+        "max-snippet": -1,
+        "max-image-preview": "large",
+        "max-video-preview": -1,
       },
+    },
 
     openGraph: {
       title: seoTitle,

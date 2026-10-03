@@ -66,32 +66,34 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
 
 
   // 150–160 chars ideal
-  const seoDescription = `Compare the best ${categoryName} institutes across India. Read genuine student reviews, check fees, batch timings, and get direct admission guidance. Updated ${currentYear}.`;
+  const seoDescription = currentPage
+    ? `Page ${currentPage} of best ${categoryName} institutes in India. Browse more listings, compare fees, reviews, and find the right coaching. AcademyFind updated ${currentYear}.`
+    : `Compare the best ${categoryName} institutes across India. Read genuine student reviews, check fees, batch timings, and get direct admission guidance. Updated ${currentYear}.`;
 
   return {
     // ── Core ──
     title: seoTitle,
     description: seoDescription,
 
-    // ── Canonical (prevents ?page=2&sort= variants from being indexed) ──
+    // ── Canonical (self-referencing for paginated pages) ──
     alternates: {
       canonical: canonicalUrl,
     },
 
-    // ── Robots ──
-    robots: currentPage
-      ? { index: false, follow: true }
-      : {
+    // ── Robots: Index all pages so Google discovers all institutes ──
+    // Paginated pages (?page=2) are real content with unique institutes
+    // noindex was hiding 90%+ of institutes from Google's index
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
         index: true,
         follow: true,
-        googleBot: {
-          index: true,
-          follow: true,
-          "max-snippet": -1,
-          "max-image-preview": "large",
-          "max-video-preview": -1,
-        },
+        "max-snippet": -1,
+        "max-image-preview": "large",
+        "max-video-preview": -1,
       },
+    },
 
     // ── Open Graph ──
     openGraph: {
